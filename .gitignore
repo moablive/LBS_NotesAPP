@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.cache/
+.turbo/
+.vite/
+coverage/
+
+.env
+.env.local
+.env.*.local
+!.env.example
+
+*.log
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+apps/backend/drizzle/_journal/
+*.db
+*.sqlite
+
+# Dump local de logos do MoneyAPP (o asset usado está em apps/frontend/public/)
+MONEYAPP/
