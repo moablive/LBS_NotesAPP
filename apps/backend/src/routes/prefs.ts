@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { db, schema } from '@todoapp/db';
+import { db, schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
-import { updateUserPrefsSchema } from '@todoapp/models';
+import { updateUserPrefsSchema } from '@notesapp/models';
 import { resolveTelegramId } from '../middleware/telegram-id.js';
 
 export const prefsRouter = Router();

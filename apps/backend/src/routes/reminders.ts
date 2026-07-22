@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { db, schema } from '@todoapp/db';
+import { db, schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
 import {
   defaultReminderSettings,
   reminderSettingsSchema,
   updateReminderSettingsSchema,
-} from '@todoapp/models';
+} from '@notesapp/models';
 import { resolveTelegramId } from '../middleware/telegram-id.js';
 
 export const remindersRouter = Router();

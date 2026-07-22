@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db } from '@todoapp/db';
-import { schema } from '@todoapp/db';
+import { db } from '@notesapp/db';
+import { schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
-import { userSettingsSchema } from '@todoapp/models';
+import { userSettingsSchema } from '@notesapp/models';
 
 export const userRouter = Router();
 

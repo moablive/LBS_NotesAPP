@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { env } from '@todoapp/services';
-import { LoginHubPayload } from '@todoapp/models';
+import { env } from '@notesapp/services';
+import { LoginHubPayload } from '@notesapp/models';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace

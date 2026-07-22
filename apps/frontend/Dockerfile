@@ -18,9 +18,7 @@ ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ARG VITE_LOGINHUB_API_URL
 ENV VITE_LOGINHUB_API_URL=$VITE_LOGINHUB_API_URL
-ARG VITE_MONEYAPP_API_URL
-ENV VITE_MONEYAPP_API_URL=$VITE_MONEYAPP_API_URL
-RUN pnpm --filter @todoapp/frontend run build
+RUN pnpm --filter @notesapp/frontend run build
 
 FROM nginx:1.27-alpine AS runtime
 COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf

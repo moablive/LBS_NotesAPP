@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { api } from '@/api/client';
-import type { TaskDto, TaskGroupDto } from '@todoapp/models';
+import type { TaskDto, TaskGroupDto } from '@notesapp/models';
 
 export const useTasksStore = defineStore('tasks', {
   state: () => ({

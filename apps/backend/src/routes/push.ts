@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db, schema } from '@todoapp/db';
+import { db, schema } from '@notesapp/db';
 import { and, eq } from 'drizzle-orm';
-import { env } from '@todoapp/services';
-import { pushSubscribeSchema, pushUnsubscribeSchema } from '@todoapp/models';
+import { env } from '@notesapp/services';
+import { pushSubscribeSchema, pushUnsubscribeSchema } from '@notesapp/models';
 import crypto from 'crypto';
 import webpush from 'web-push';
 import { resolveTelegramId } from '../middleware/telegram-id.js';

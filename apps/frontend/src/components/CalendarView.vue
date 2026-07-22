@@ -447,7 +447,7 @@ import {
   StarIcon
 } from '@heroicons/vue/24/outline';
 import { CalendarIcon } from '@heroicons/vue/24/solid';
-import type { TaskDto, Occurrence } from '@todoapp/models';
+import type { TaskDto, Occurrence } from '@notesapp/models';
 import { useTasksStore } from '@/stores/tasks';
 import TaskDetailsPanel from './TaskDetailsPanel.vue';
 

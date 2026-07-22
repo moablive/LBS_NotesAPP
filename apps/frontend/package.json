@@ -1,5 +1,5 @@
 {
-  "name": "@todoapp/frontend",
+  "name": "@notesapp/frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
-    "@todoapp/api-client": "workspace:*",
-    "@todoapp/models": "workspace:*",
+    "@notesapp/api-client": "workspace:*",
+    "@notesapp/models": "workspace:*",
     "@vuepic/vue-datepicker": "^13.0.0",
     "@vueuse/core": "^14.3.0",
     "chart.js": "^4.4.0",

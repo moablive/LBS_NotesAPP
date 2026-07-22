@@ -12,9 +12,9 @@
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
-    "db:generate": "pnpm --filter @todoapp/backend run db:generate",
-    "db:migrate": "pnpm --filter @todoapp/backend run db:migrate",
-    "db:studio": "pnpm --filter @todoapp/backend run db:studio"
+    "db:generate": "pnpm --filter @notesapp/backend run db:generate",
+    "db:migrate": "pnpm --filter @notesapp/backend run db:migrate",
+    "db:studio": "pnpm --filter @notesapp/backend run db:studio"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

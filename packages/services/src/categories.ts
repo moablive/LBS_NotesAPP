@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { db, schema } from '@todoapp/db';
+import { db, schema } from '@notesapp/db';
 
 const DEFAULT_CATEGORIES = [
   { name: 'Controle 📊', type: 'expense' },

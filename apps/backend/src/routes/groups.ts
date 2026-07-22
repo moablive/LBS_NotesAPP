@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db } from '@todoapp/db';
-import { schema } from '@todoapp/db';
+import { db } from '@notesapp/db';
+import { schema } from '@notesapp/db';
 import { eq, and } from 'drizzle-orm';
-import { createTaskGroupSchema, updateTaskGroupSchema } from '@todoapp/models';
+import { createTaskGroupSchema, updateTaskGroupSchema } from '@notesapp/models';
 import crypto from 'crypto';
 import { resolveTelegramId } from '../middleware/telegram-id.js';
 

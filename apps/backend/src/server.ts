@@ -1,5 +1,5 @@
 import { createApp } from './app';
-import { env } from '@todoapp/services';
+import { env } from '@notesapp/services';
 
 async function main() {
   // Last-resort safety net: a stray promise rejection outside the request

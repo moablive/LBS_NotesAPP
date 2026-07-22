@@ -7,8 +7,8 @@ import { remindersRouter } from './reminders.js';
 import { prefsRouter } from './prefs.js';
 import { botRouter } from './bot.js';
 import { requireAuth, requireBotKey } from '../middleware/auth.js';
-import { db } from '@todoapp/db';
-import { schema } from '@todoapp/db';
+import { db } from '@notesapp/db';
+import { schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
 
 export const apiRouter = Router();

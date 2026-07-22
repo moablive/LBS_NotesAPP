@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { db, schema } from '@todoapp/db';
+import { db, schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
 
 declare global {

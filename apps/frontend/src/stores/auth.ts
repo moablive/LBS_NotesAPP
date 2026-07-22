@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { api } from '@/api/client';
-import type { LoginRequest } from '@todoapp/models';
+import type { LoginRequest } from '@notesapp/models';
 
 const LOGINHUB_API = import.meta.env.VITE_LOGINHUB_API_URL || 'https://api-auth.astralwavelabel.com/api';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@todoapp/api-client",
+  "name": "@notesapp/api-client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,6 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@todoapp/models": "workspace:*"
+    "@notesapp/models": "workspace:*"
   }
 }

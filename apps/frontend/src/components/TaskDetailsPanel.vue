@@ -134,7 +134,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { ClockIcon, ArrowPathIcon, FolderIcon, FlagIcon, CheckCircleIcon } from '@heroicons/vue/24/outline';
 import { useTasksStore } from '@/stores/tasks';
-import type { TaskDto } from '@todoapp/models';
+import type { TaskDto } from '@notesapp/models';
 import DatePickerDropdown from './DatePickerDropdown.vue';
 import TimePickerDropdown from './TimePickerDropdown.vue';
 

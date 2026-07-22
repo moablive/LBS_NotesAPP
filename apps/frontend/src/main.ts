@@ -4,7 +4,7 @@ import App from './App.vue';
 import router from './router';
 import './styles/main.css';
 
-import { setupApi } from '@todoapp/api-client';
+import { setupApi } from '@notesapp/api-client';
 import { useAuthStore } from './stores/auth';
 
 const pinia = createPinia();
