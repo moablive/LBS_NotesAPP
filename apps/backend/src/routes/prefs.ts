@@ -14,8 +14,6 @@ prefsRouter.get('/', async (req, res) => {
   });
   res.json({ 
     kanbanLists: row?.kanbanLists ?? [],
-    showMoneyAppEvents: row?.showMoneyAppEvents ?? true,
-    moneyAppColor: row?.moneyAppColor ?? '#30d158',
     showHolidays: row?.showHolidays ?? true,
     holidayColor: row?.holidayColor ?? '#6b7280'
   });
@@ -27,8 +25,6 @@ prefsRouter.patch('/', async (req, res) => {
 
   const setObj: any = { updatedAt: new Date() };
   if (parsed.kanbanLists !== undefined) setObj.kanbanLists = parsed.kanbanLists;
-  if (parsed.showMoneyAppEvents !== undefined) setObj.showMoneyAppEvents = parsed.showMoneyAppEvents;
-  if (parsed.moneyAppColor !== undefined) setObj.moneyAppColor = parsed.moneyAppColor;
   if (parsed.showHolidays !== undefined) setObj.showHolidays = parsed.showHolidays;
   if (parsed.holidayColor !== undefined) setObj.holidayColor = parsed.holidayColor;
 
@@ -37,8 +33,6 @@ prefsRouter.patch('/', async (req, res) => {
     .values({ 
       userId, 
       kanbanLists: parsed.kanbanLists ?? [],
-      showMoneyAppEvents: parsed.showMoneyAppEvents ?? true,
-      moneyAppColor: parsed.moneyAppColor ?? '#30d158',
       showHolidays: parsed.showHolidays ?? true,
       holidayColor: parsed.holidayColor ?? '#6b7280'
     })
@@ -50,8 +44,6 @@ prefsRouter.patch('/', async (req, res) => {
 
   res.json({ 
     kanbanLists: row?.kanbanLists ?? [],
-    showMoneyAppEvents: row?.showMoneyAppEvents ?? true,
-    moneyAppColor: row?.moneyAppColor ?? '#30d158',
     showHolidays: row?.showHolidays ?? true,
     holidayColor: row?.holidayColor ?? '#6b7280'
   });
