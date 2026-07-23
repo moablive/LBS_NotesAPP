@@ -1,0 +1,1 @@
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS parent_id varchar(36) REFERENCES notes(id) ON DELETE CASCADE;

@@ -14,7 +14,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'TodoAPP', body: '', url: '/' };
+  let data = { title: 'NotesAPP', body: '', url: '/' };
   try {
     data = { ...data, ...event.data?.json() };
   } catch {
@@ -28,7 +28,7 @@ self.addEventListener('push', (event) => {
         icon: '/logo/icon-192.png',
         badge: '/logo/icon-192.png',
         data: { url: data.url },
-        tag: `todoapp-${Date.now()}`,
+        tag: `notesapp-${Date.now()}`,
       });
       // Número no ícone do app (Badging API) — funciona mesmo com o app fechado.
       if (typeof data.badge === 'number' && self.navigator.setAppBadge) {
