@@ -60,9 +60,10 @@ export const notes = pgTable(
     isFavorite: boolean("is_favorite").default(false).notNull(),
     coverImage: text("cover_image"),
     icon: text("icon"),
-    
     // Zettelkasten / Reminders
     remindAt: timestamp("remind_at", { withTimezone: true }),
+    
+    parentId: varchar("parent_id", { length: 36 }), // null para notas raiz (adicionado recursivo)
     
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -164,6 +165,12 @@ export const notesRelations = relations(notes, ({ one, many }) => ({
     fields: [notes.folderId],
     references: [folders.id],
   }),
+  parent: one(notes, {
+    fields: [notes.parentId],
+    references: [notes.id],
+    relationName: "parentNote",
+  }),
+  children: many(notes, { relationName: "parentNote" }),
   tags: many(noteTags),
   outgoingLinks: many(noteLinks, { relationName: "sourceNote" }),
   incomingLinks: many(noteLinks, { relationName: "targetNote" }),

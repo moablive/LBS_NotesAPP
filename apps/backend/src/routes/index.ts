@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { tasksRouter } from './tasks.js';
-import { groupsRouter } from './groups.js';
+import { notesRouter } from './notes.js';
+import { foldersRouter } from './folders.js';
 import { userRouter } from './user.js';
 import { pushRouter } from './push.js';
 import { remindersRouter } from './reminders.js';
@@ -56,8 +56,8 @@ apiRouter.use(async (req, res, next) => {
 });
 
 apiRouter.use('/user', userRouter);
-apiRouter.use('/tasks', tasksRouter);
-apiRouter.use('/groups', groupsRouter);
+apiRouter.use('/notes', notesRouter);
+apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/push', pushRouter);
 apiRouter.use('/reminders', remindersRouter);
 apiRouter.use('/prefs', prefsRouter);
