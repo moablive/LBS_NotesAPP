@@ -6,9 +6,11 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
 
   // LoginHub — o bot valida e-mail+senha direto no LoginHub (padrão MoneyAPP)
-  // e então vincula o telegramId ao usuário no banco do TodoAPP.
+  // e então vincula o telegramId ao usuário no banco do NotesAPP.
   LOGINHUB_API_URL: z.string().default('https://api-auth.astralwavelabel.com/api'),
-  LOGINHUB_APP_ID: z.coerce.number().default(4),
+  // App id do NotesAPP no LoginHub (NÃO usar o do TodoAPP=4, senão o login é
+  // validado no tenant errado). Sobrescrito pelo .env em produção.
+  LOGINHUB_APP_ID: z.coerce.number().default(11),
   // Web Push (VAPID) — mesmas chaves do backend; opcional, sem elas o bot só
   // envia lembretes pelo Telegram.
   VAPID_PUBLIC_KEY: z.string().optional(),

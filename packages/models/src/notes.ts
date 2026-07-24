@@ -10,6 +10,7 @@ export const createNoteSchema = z.object({
   isFavorite: z.boolean().optional(),
   coverImage: z.string().nullable().optional(),
   icon: z.string().nullable().optional(),
+  order: z.number().int().optional(),
 });
 
 export const updateNoteSchema = createNoteSchema.partial().extend({

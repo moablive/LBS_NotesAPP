@@ -98,37 +98,18 @@ export const botApi = {
     return row ? { loginhubId: row.loginhub_id } : null;
   },
 
-  // Vincula o telegramId ao usuário do LoginHub e migra o namespace provisório
-  // (dados criados na web antes do vínculo ficam sob String(loginhubId)).
+  // Vincula o telegramId ao usuário do LoginHub. No NotesAPP os dados ficam
+  // sempre sob o loginhub_id (não há namespace provisório por telegram_id como
+  // no TodoAPP), então o vínculo é só o upsert em user_settings.
+  // ⚠️ NÃO migrar tasks/task_groups/reminder_settings aqui: essas tabelas são do
+  // TodoAPP e NÃO existem no banco notesapp — o UPDATE dava 42P01, ROLLBACK e o
+  // login inteiro falhava.
   linkTelegram: async (loginhubId: number, telegramId: string): Promise<void> => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        `INSERT INTO user_settings (loginhub_id, telegram_id) VALUES ($1, $2)
-         ON CONFLICT (loginhub_id) DO UPDATE SET telegram_id = EXCLUDED.telegram_id`,
-        [loginhubId, telegramId]
-      );
-      const provisional = String(loginhubId);
-      if (provisional !== telegramId) {
-        for (const table of ['tasks', 'task_groups', 'push_subscriptions']) {
-          await client.query(`UPDATE ${table} SET user_id = $1 WHERE user_id = $2`, [telegramId, provisional]);
-        }
-        // user_id é PK aqui — só migra se o destino ainda não tiver configuração.
-        await client.query(
-          `UPDATE reminder_settings SET user_id = $1
-           WHERE user_id = $2 AND NOT EXISTS (SELECT 1 FROM reminder_settings WHERE user_id = $1)`,
-          [telegramId, provisional]
-        );
-        await client.query('DELETE FROM reminder_settings WHERE user_id = $1', [provisional]);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    await pool.query(
+      `INSERT INTO user_settings (loginhub_id, telegram_id) VALUES ($1, $2)
+       ON CONFLICT (loginhub_id) DO UPDATE SET telegram_id = EXCLUDED.telegram_id`,
+      [loginhubId, telegramId]
+    );
   },
 
   getReminderSettings: async (userId: string): Promise<ReminderSettings> => {

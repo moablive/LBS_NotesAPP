@@ -62,9 +62,21 @@ export const notes = pgTable(
     icon: text("icon"),
     // Zettelkasten / Reminders
     remindAt: timestamp("remind_at", { withTimezone: true }),
-    
-    parentId: varchar("parent_id", { length: 36 }), // null para notas raiz (adicionado recursivo)
-    
+
+    // Aninhamento infinito estilo Notion: uma nota pode conter outras notas.
+    // FK auto-referente com ON DELETE CASCADE → apagar uma nota apaga toda a
+    // sub-árvore. null = nota raiz.
+    parentId: varchar("parent_id", { length: 36 }).references(
+      (): any => notes.id,
+      { onDelete: "cascade" }
+    ),
+    // Ordem entre irmãs na árvore (Notion permite reordenar/arrastar).
+    order: integer("order").default(0).notNull(),
+
+    // Lixeira (soft delete): null = ativa; preenchido = na lixeira.
+    // Exclusão só remove a linha de vez ao esvaziar/apagar definitivo.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -75,6 +87,8 @@ export const notes = pgTable(
   (t) => ({
     userIdx: index("notes_user_idx").on(t.userId),
     folderIdx: index("notes_folder_idx").on(t.folderId),
+    parentIdx: index("notes_parent_idx").on(t.parentId),
+    deletedIdx: index("notes_deleted_idx").on(t.userId, t.deletedAt),
   })
 );
 

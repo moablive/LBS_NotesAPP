@@ -5,11 +5,16 @@ import type { NoteDto, FolderDto, UpdateNoteDto } from '@notesapp/models';
 export const useNotesStore = defineStore('notes', {
   state: () => ({
     notes: [] as NoteDto[],
+    trash: [] as NoteDto[],
     folders: [] as FolderDto[],
     isLoading: false,
     selectedFolderId: null as string | null,
     searchQuery: '',
     activeNoteId: null as string | null,
+    // Notas expandidas na árvore lateral (id -> aberto?).
+    expandedIds: {} as Record<string, boolean>,
+    // Nota sendo arrastada (drag-and-drop na árvore).
+    draggingId: null as string | null,
   }),
   actions: {
     async fetchAll() {
@@ -25,7 +30,11 @@ export const useNotesStore = defineStore('notes', {
         this.isLoading = false;
       }
     },
-    async addNote(title: string, folderId: string | null = null, parentId: string | null = null) {
+    async addNote(
+      title: string,
+      folderId: string | null = null,
+      parentId: string | null = null,
+    ) {
       const note = await api.post<NoteDto>('/notes', { title, folderId, parentId, content: '' });
       this.notes.unshift(note);
       this.activeNoteId = note.id;
@@ -37,12 +46,79 @@ export const useNotesStore = defineStore('notes', {
       if (idx !== -1) this.notes[idx] = updated;
       return updated;
     },
+    /** Ids de todas as descendentes (filhas, netas, …) de uma nota. */
+    descendantIds(noteId: string): string[] {
+      const acc: string[] = [];
+      const walk = (pid: string) => {
+        for (const n of this.notes) {
+          if (n.parentId === pid) {
+            acc.push(n.id);
+            walk(n.id);
+          }
+        }
+      };
+      walk(noteId);
+      return acc;
+    },
+    async fetchTrash() {
+      this.trash = await api.get<NoteDto[]>('/notes/trash');
+    },
+    // Mover para a lixeira (soft delete). A sub-árvore vai junto no backend;
+    // espelhamos removendo-a das notas ativas em memória.
     async deleteNote(noteId: string) {
+      const toRemove = new Set<string>([noteId, ...this.descendantIds(noteId)]);
       await api.delete(`/notes/${noteId}`);
-      this.notes = this.notes.filter(n => n.id !== noteId);
-      if (this.activeNoteId === noteId) {
+      this.notes = this.notes.filter(n => !toRemove.has(n.id));
+      if (this.activeNoteId && toRemove.has(this.activeNoteId)) {
         this.activeNoteId = null;
       }
+      await this.fetchTrash();
+    },
+    // Restaurar da lixeira (a sub-árvore volta; o pai pode ser normalizado
+    // para raiz no backend). Recarrega ativos + lixeira para refletir tudo.
+    async restoreNote(noteId: string) {
+      await api.post(`/notes/${noteId}/restore`, {});
+      await Promise.all([this.fetchAll(), this.fetchTrash()]);
+    },
+    // Apagar definitivamente uma nota da lixeira (remove a linha; cascata na FK).
+    async permanentDelete(noteId: string) {
+      await api.delete(`/notes/${noteId}/permanent`);
+      await this.fetchTrash();
+    },
+    async emptyTrash() {
+      await api.post('/notes/trash/empty', {});
+      this.trash = [];
+    },
+    /** Move uma nota para um novo pai (null = raiz), no fim das irmãs. */
+    async moveNote(noteId: string, newParentId: string | null) {
+      if (noteId === newParentId) return;
+      const note = this.notes.find(n => n.id === noteId);
+      if (!note) return;
+      if (note.parentId === newParentId) return; // nada mudou
+      // Guarda de ciclo: o novo pai não pode ser a própria nota nem uma descendente.
+      if (newParentId) {
+        const desc = new Set(this.descendantIds(noteId));
+        if (desc.has(newParentId)) return;
+      }
+      const order = this.notes.filter(
+        n => n.parentId === newParentId && n.id !== noteId,
+      ).length;
+      await this.updateNoteFields(noteId, { parentId: newParentId, order });
+      if (newParentId) this.expand(newParentId);
+    },
+    async toggleFavorite(noteId: string) {
+      const note = this.notes.find(n => n.id === noteId);
+      if (!note) return;
+      await this.updateNoteFields(noteId, { isFavorite: !(note as any).isFavorite });
+    },
+    toggleExpanded(noteId: string) {
+      this.expandedIds[noteId] = !this.expandedIds[noteId];
+    },
+    expand(noteId: string) {
+      this.expandedIds[noteId] = true;
+    },
+    setDragging(noteId: string | null) {
+      this.draggingId = noteId;
     },
     async addFolder(name: string, parentId: string | null = null, icon: string | null = null) {
       const folder = await api.post<FolderDto>('/folders', { name, parentId, icon });
@@ -85,11 +161,42 @@ export const useNotesStore = defineStore('notes', {
     },
   },
   getters: {
+    // Filhas diretas de um pai (null = raízes da árvore), ordenadas.
+    childrenOf(state) {
+      return (parentId: string | null): NoteDto[] =>
+        state.notes
+          .filter(n => (n.parentId ?? null) === parentId)
+          .sort((a, b) => {
+            const ao = (a as any).order ?? 0;
+            const bo = (b as any).order ?? 0;
+            if (ao !== bo) return ao - bo;
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          });
+    },
+    // Notas raiz (parentId nulo).
+    treeRoots(): NoteDto[] {
+      return this.childrenOf(null);
+    },
+    // Notas marcadas como favoritas (para a seção Favorites, estilo Notion).
+    favorites(state): NoteDto[] {
+      return state.notes
+        .filter(n => (n as any).isFavorite)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    },
+    // Busca plana (usada na sidebar quando há termo de pesquisa).
+    searchMatches(state): NoteDto[] {
+      const query = state.searchQuery.trim().toLowerCase();
+      if (!query) return [];
+      return state.notes.filter(n =>
+        n.title.toLowerCase().includes(query) ||
+        (n.content && n.content.toLowerCase().includes(query)),
+      );
+    },
     filteredNotes(state) {
       if (state.searchQuery.trim()) {
         const query = state.searchQuery.toLowerCase();
-        return state.notes.filter(n => 
-          n.title.toLowerCase().includes(query) || 
+        return state.notes.filter(n =>
+          n.title.toLowerCase().includes(query) ||
           (n.content && n.content.toLowerCase().includes(query))
         );
       }
