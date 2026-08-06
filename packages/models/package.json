@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@notesapp/db": "workspace:^",
     "zod": "^3.23.8"
   }
 }
