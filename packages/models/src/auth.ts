@@ -10,3 +10,9 @@ export const userSettingsSchema = z.object({
   telegramId: z.string().nullable().optional(),
 });
 export type UserSettingsRequest = z.infer<typeof userSettingsSchema>;
+
+export interface LoginHubPayload {
+  loginhubId: number;
+  email: string;
+  sub?: string;
+}

@@ -261,6 +261,14 @@
               </button>
               <div class="flex items-center gap-2 ml-auto">
                  <button
+                   class="text-[var(--muted)] hover:text-[var(--text)] p-1.5 transition-colors"
+                   :class="notesStore.isGraphVisible ? 'text-[var(--accent)]' : ''"
+                   @click="notesStore.toggleGraphVisible()"
+                   title="Toggle Graph View"
+                 >
+                    <ShareIcon class="w-4 h-4" />
+                 </button>
+                 <button
                    class="p-1.5 transition-colors"
                    :class="notesStore.activeNote.isFavorite ? 'text-yellow-400 hover:text-yellow-300' : 'text-[var(--muted)] hover:text-[var(--text)]'"
                    @click="notesStore.toggleFavorite(notesStore.activeNote.id)"
@@ -333,10 +341,34 @@
                 />
 
                 <TiptapEditor
-                  v-model="notesStore.activeNote.content"
+                  :model-value="notesStore.activeNote.content || undefined"
+                  @update:model-value="val => { if (notesStore.activeNote) notesStore.activeNote.content = val }"
                   @blur="saveNote(notesStore.activeNote)"
                   @create-note="createSubPageFromEditor"
                 />
+
+                <!-- Backlinks Section -->
+                <div v-if="notesStore.backlinks.length > 0" class="mt-12 pt-8 border-t border-[var(--border-soft)]">
+                  <h3 class="text-[14px] font-semibold text-[var(--text)] mb-4">Backlinks</h3>
+                  <div class="space-y-2">
+                    <div
+                      v-for="backlink in notesStore.backlinks"
+                      :key="backlink.id"
+                      class="flex flex-col gap-1 p-3 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] hover:border-[var(--accent)] transition-colors cursor-pointer"
+                      @click="notesStore.setActiveNote(backlink.id)"
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="w-4 h-4 shrink-0 inline-flex items-center justify-center">
+                          <img v-if="backlink.icon && (backlink.icon.startsWith('http') || backlink.icon.startsWith('data:'))" :src="backlink.icon" class="w-4 h-4 rounded-sm object-cover" />
+                          <span v-else-if="backlink.icon" class="text-[14px]">{{ backlink.icon }}</span>
+                          <DocumentTextIcon v-else class="w-4 h-4 text-[var(--muted)]" />
+                        </span>
+                        <span class="text-[14px] font-medium text-[var(--text)]">{{ backlink.title || 'Sem título' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
              </div>
            </div>
         </div>
@@ -346,6 +378,23 @@
            <DocumentTextIcon class="w-16 h-16 text-[var(--border-soft)] mb-4" />
            <p class="text-[var(--muted)] text-[15px]">Select a note or create a new one.</p>
         </div>
+
+        <!-- Graph Right Panel -->
+        <aside
+          v-if="notesStore.isGraphVisible"
+          class="w-[300px] shrink-0 border-l border-[var(--border-soft)] bg-[var(--bg)] flex flex-col hidden md:flex"
+        >
+          <div class="h-12 border-b border-[var(--border-soft)] flex items-center px-4 shrink-0">
+             <span class="text-[14px] font-semibold">Graph View</span>
+          </div>
+          <div class="flex-1 min-h-0 relative">
+             <GraphView
+               v-if="notesStore.isGraphVisible"
+               :active-note-id="notesStore.activeNoteId || undefined"
+               @node-click="handleGraphNodeClick"
+             />
+          </div>
+        </aside>
       </div>
     </main>
 
@@ -421,12 +470,14 @@ import {
   PhotoIcon,
   FaceSmileIcon,
   StarIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  ShareIcon
 } from '@heroicons/vue/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/vue/24/solid';
 import TiptapEditor from '@/components/editor/TiptapEditor.vue';
 import NoteTreeItem from '@/components/NoteTreeItem.vue';
 import SettingsModal from '@/components/SettingsModal.vue';
+import GraphView from '@/components/GraphView.vue';
 import '@/composables/useTheme';
 
 const notesStore = useNotesStore();
@@ -440,6 +491,12 @@ const showSettings = ref(false);
 
 // 'notes' = árvore/editor | 'trash' = lixeira
 const viewMode = ref<'notes' | 'trash'>('notes');
+
+const handleGraphNodeClick = (nodeId: string) => {
+  if (notesStore.notes.some(n => n.id === nodeId)) {
+    notesStore.setActiveNote(nodeId);
+  }
+};
 
 type ConfirmState = { title: string; message: string; confirmLabel: string; onConfirm: () => void };
 const confirmState = ref<ConfirmState | null>(null);

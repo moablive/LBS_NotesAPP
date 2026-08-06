@@ -15,6 +15,10 @@ export const useNotesStore = defineStore('notes', {
     expandedIds: {} as Record<string, boolean>,
     // Nota sendo arrastada (drag-and-drop na árvore).
     draggingId: null as string | null,
+    // Graph links and backlinks state
+    graphEdges: [] as { sourceNoteId: string, targetNoteId: string }[],
+    backlinks: [] as NoteDto[],
+    isGraphVisible: false,
   }),
   actions: {
     async fetchAll() {
@@ -89,6 +93,23 @@ export const useNotesStore = defineStore('notes', {
       await api.post('/notes/trash/empty', {});
       this.trash = [];
     },
+    async fetchLinks() {
+      try {
+        this.graphEdges = await api.get<{ sourceNoteId: string, targetNoteId: string }[]>('/notes/links');
+      } catch (err) {
+        console.error('Failed to fetch graph links', err);
+      }
+    },
+    async fetchBacklinks(noteId: string) {
+      try {
+        this.backlinks = await api.get<NoteDto[]>(`/notes/${noteId}/backlinks`);
+      } catch (err) {
+        console.error('Failed to fetch backlinks', err);
+      }
+    },
+    toggleGraphVisible() {
+      this.isGraphVisible = !this.isGraphVisible;
+    },
     /** Move uma nota para um novo pai (null = raiz), no fim das irmãs. */
     async moveNote(noteId: string, newParentId: string | null) {
       if (noteId === newParentId) return;
@@ -148,6 +169,11 @@ export const useNotesStore = defineStore('notes', {
     },
     setActiveNote(noteId: string | null) {
       this.activeNoteId = noteId;
+      if (noteId) {
+        this.fetchBacklinks(noteId);
+      } else {
+        this.backlinks = [];
+      }
     },
     async reorderFolders(newFolders: FolderDto[]) {
       const originalFolders = [...this.folders];

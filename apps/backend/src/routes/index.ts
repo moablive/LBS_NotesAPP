@@ -4,7 +4,6 @@ import { foldersRouter } from './folders.js';
 import { userRouter } from './user.js';
 import { pushRouter } from './push.js';
 import { remindersRouter } from './reminders.js';
-import { prefsRouter } from './prefs.js';
 import { botRouter } from './bot.js';
 import { requireAuth, requireBotKey } from '../middleware/auth.js';
 import { db } from '@notesapp/db';
@@ -45,7 +44,7 @@ apiRouter.post('/auth/login', async (req, res) => {
 apiRouter.use('/bot', requireBotKey, botRouter);
 
 apiRouter.use(requireAuth);
-apiRouter.use(async (req, res, next) => {
+apiRouter.use(async (req, _res, next) => {
   // auto-create user_settings if not exists
   if (req.user) {
     const existing = await db.query.userSettings.findFirst({
@@ -63,4 +62,3 @@ apiRouter.use('/notes', notesRouter);
 apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/push', pushRouter);
 apiRouter.use('/reminders', remindersRouter);
-apiRouter.use('/prefs', prefsRouter);
