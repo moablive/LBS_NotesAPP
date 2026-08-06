@@ -254,7 +254,7 @@
                 <label v-if="prefs.showHolidays" class="w-6 h-6 rounded-full overflow-hidden cursor-pointer shadow border border-[var(--border)] shrink-0" :style="{ backgroundColor: prefs.holidayColor || '#6b7280' }">
                   <input type="color" v-model="prefs.holidayColor" class="opacity-0 absolute" />
                 </label>
-                <ToggleSwitch v-model="prefs.showHolidays" />
+                <ToggleSwitch :model-value="prefs.showHolidays || false" @update:model-value="val => prefs.showHolidays = val" />
               </div>
             </div>
           </div>

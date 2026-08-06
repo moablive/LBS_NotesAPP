@@ -3,6 +3,7 @@
   "compilerOptions": {
     "jsx": "preserve",
     "types": ["vite/client"],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

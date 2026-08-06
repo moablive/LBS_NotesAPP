@@ -5,13 +5,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { onBeforeUnmount, watch } from 'vue';
 import { useEditor, EditorContent, VueRenderer } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import SlashCommands from './slashExtension';
 import tippy from 'tippy.js';
 import CommandList from './CommandList.vue';
+import NoteLinkExtension from './NoteLinkExtension';
+import NoteLinkList from './NoteLinkList.vue';
+import { useNotesStore } from '@/stores/notes';
 
 const props = defineProps({
   modelValue: {
@@ -86,10 +89,93 @@ const renderCommandList = () => {
   };
 };
 
+let linkPopup: any;
+let linkComponent: any;
+
+const renderLinkList = () => {
+  return {
+    onStart: (props: any) => {
+      linkComponent = new VueRenderer(NoteLinkList, {
+        props: {
+          items: props.items,
+          command: props.command,
+        },
+        editor: props.editor,
+      });
+
+      if (!props.clientRect) {
+        return;
+      }
+
+      linkPopup = tippy('body', {
+        getReferenceClientRect: props.clientRect,
+        appendTo: () => document.body,
+        content: linkComponent.element,
+        showOnCreate: true,
+        interactive: true,
+        trigger: 'manual',
+        placement: 'bottom-start',
+      });
+    },
+    onUpdate(props: any) {
+      linkComponent.updateProps({
+        items: props.items,
+        command: props.command,
+      });
+
+      if (!props.clientRect) {
+        return;
+      }
+
+      linkPopup[0].setProps({
+        getReferenceClientRect: props.clientRect,
+      });
+    },
+    onKeyDown(props: any) {
+      if (props.event.key === 'Escape') {
+        linkPopup[0].hide();
+        return true;
+      }
+      return linkComponent.ref?.onKeyDown(props.event);
+    },
+    onExit() {
+      linkPopup[0].destroy();
+      linkComponent.destroy();
+    },
+  };
+};
+
 const editor = useEditor({
   content: props.modelValue,
   extensions: [
     StarterKit,
+    NoteLinkExtension.configure({
+      suggestion: {
+        char: '[[',
+        items: ({ query }: { query: string }) => {
+          const store = useNotesStore();
+          return store.notes
+            .filter(n => n.title.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 10);
+        },
+        render: renderLinkList,
+        command: ({ editor, range, props }: any) => {
+          editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent([
+              {
+                type: 'noteLink',
+                attrs: { 'data-note-id': props.id },
+                content: [{ type: 'text', text: props.title || 'Sem título' }],
+              },
+              { type: 'text', text: ' ' },
+            ])
+            .run();
+        },
+      },
+    }),
     Placeholder.configure({
       placeholder: props.placeholder,
     }),
