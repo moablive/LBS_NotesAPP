@@ -10,6 +10,15 @@ export const notesRouter = Router();
 notesRouter.use(resolveTelegramId);
 
 /**
+ * Extrai os IDs de notas linkadas do conteúdo HTML (Grafo).
+ */
+function extractLinks(content: string): string[] {
+  if (!content) return [];
+  const matches = [...content.matchAll(/<a[^>]*data-note-id=["']([a-f0-9-]+)["']/gi)];
+  return [...new Set(matches.map(m => m[1]).filter((id): id is string => !!id))];
+}
+
+/**
  * Valida um parentId proposto para uma nota:
  *  - o pai precisa existir e pertencer ao mesmo usuário;
  *  - não pode ser a própria nota (self-parent);
@@ -29,7 +38,7 @@ async function validateParent(
   while (current) {
     if (seen.has(current)) break; // proteção contra dado já cíclico
     seen.add(current);
-    const rows = await db
+    const rows: { id: string, parentId: string | null }[] = await db
       .select({ id: schema.notes.id, parentId: schema.notes.parentId })
       .from(schema.notes)
       .where(and(eq(schema.notes.id, current), eq(schema.notes.userId, telegramId)))
@@ -65,6 +74,49 @@ notesRouter.get('/', async (req, res) => {
     orderBy: (notes, { asc, desc }) => [asc(notes.order), desc(notes.updatedAt)],
   });
   res.json(notes);
+});
+
+// Busca as arestas do grafo para todas as notas do usuário atual
+notesRouter.get('/links', async (req, res) => {
+  const telegramId = (req as any).telegramId;
+
+  // Como noteLinks tem sourceNoteId, garantimos que a origem pertence ao usuário
+  // e não está deletada.
+  const edges = await db
+    .select({
+      sourceNoteId: schema.noteLinks.sourceNoteId,
+      targetNoteId: schema.noteLinks.targetNoteId,
+    })
+    .from(schema.noteLinks)
+    .innerJoin(schema.notes, eq(schema.noteLinks.sourceNoteId, schema.notes.id))
+    .where(and(
+      eq(schema.notes.userId, telegramId),
+      isNull(schema.notes.deletedAt)
+    ));
+
+  res.json(edges);
+});
+
+// Busca as notas que referenciam a nota atual (Backlinks)
+notesRouter.get('/:id/backlinks', async (req, res) => {
+  const telegramId = (req as any).telegramId;
+
+  const backlinks = await db
+    .select({
+      id: schema.notes.id,
+      title: schema.notes.title,
+      icon: schema.notes.icon,
+    })
+    .from(schema.notes)
+    .innerJoin(schema.noteLinks, eq(schema.notes.id, schema.noteLinks.sourceNoteId))
+    .where(and(
+      eq(schema.noteLinks.targetNoteId, req.params.id),
+      eq(schema.notes.userId, telegramId),
+      isNull(schema.notes.deletedAt)
+    ))
+    .orderBy(schema.notes.updatedAt);
+
+  res.json(backlinks);
 });
 
 // Notas na lixeira (soft-deleted), mais recentes primeiro.
@@ -104,6 +156,18 @@ notesRouter.post('/', async (req, res) => {
     icon: parsed.icon || null,
   }).returning();
 
+  // Graph links sync
+  if (parsed.content) {
+    const targetIds = extractLinks(parsed.content);
+    if (targetIds.length > 0) {
+      const linkValues = targetIds.map(targetId => ({
+        sourceNoteId: id,
+        targetNoteId: targetId
+      }));
+      await db.insert(schema.noteLinks).values(linkValues).onConflictDoNothing();
+    }
+  }
+
   res.status(201).json(inserted[0]);
 });
 
@@ -133,6 +197,21 @@ notesRouter.patch('/:id', async (req, res) => {
     .returning();
 
   if (!updated.length) return res.status(404).json({ error: 'not_found' });
+
+  // Graph links sync
+  if (parsed.content !== undefined) {
+    await db.delete(schema.noteLinks).where(eq(schema.noteLinks.sourceNoteId, req.params.id));
+
+    const targetIds = extractLinks(parsed.content || '');
+    if (targetIds.length > 0) {
+      const linkValues = targetIds.map(targetId => ({
+        sourceNoteId: req.params.id,
+        targetNoteId: targetId
+      }));
+      await db.insert(schema.noteLinks).values(linkValues).onConflictDoNothing();
+    }
+  }
+
   res.json(updated[0]);
 });
 

@@ -8,7 +8,6 @@ import {
   pgTable,
   integer,
   primaryKey,
-  jsonb,
 } from "drizzle-orm/pg-core";
 
 // Integrações padrão do ecossistema LBS
