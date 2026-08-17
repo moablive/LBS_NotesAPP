@@ -4,6 +4,7 @@ import type { Folder } from '@notesapp/db';
 export const createFolderSchema = z.object({
   name: z.string().min(1, 'Name is required').max(120),
   parentId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
   icon: z.string().nullable().optional(),
   order: z.number().int().optional(),
 });

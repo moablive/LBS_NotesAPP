@@ -1,6 +1,6 @@
 import type { MiddlewareFn } from 'telegraf';
 import type { BotContext } from './context.js';
-import { botApi } from '@todo/api-client';
+import { botApi } from '@notes/api-client';
 
 // Cache em memória de telegramIds já vinculados — evita um SELECT por update.
 // Vínculo não é desfeito em operação normal, então não precisa de TTL.

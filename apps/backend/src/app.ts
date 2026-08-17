@@ -33,7 +33,7 @@ export function createApp() {
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
       // eslint-disable-next-line no-console
       console.error(err);
-      res.status(500).json({ error: 'internal_error' });
+      res.status(500).json({ error: 'internal_error', details: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
     },
   );
 

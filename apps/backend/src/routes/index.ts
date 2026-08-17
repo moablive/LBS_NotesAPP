@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { notesRouter } from './notes.js';
+import { workspacesRouter } from './workspaces.js';
 import { foldersRouter } from './folders.js';
 import { userRouter } from './user.js';
 import { pushRouter } from './push.js';
 import { remindersRouter } from './reminders.js';
-import { botRouter } from './bot.js';
-import { requireAuth, requireBotKey } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import { db } from '@notesapp/db';
 import { schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
@@ -41,8 +41,9 @@ apiRouter.post('/auth/login', async (req, res) => {
   }
 });
 
-apiRouter.use('/bot', requireBotKey, botRouter);
-
+// /bot e /prefs foram removidos: consultavam `schema.tasks` e `schema.userPrefs`,
+// tabelas do TodoAPP que não existem no NotesAPP (o bot fala direto no Postgres,
+// e o app não tem kanban/calendário para configurar).
 apiRouter.use(requireAuth);
 apiRouter.use(async (req, _res, next) => {
   // auto-create user_settings if not exists
@@ -58,6 +59,7 @@ apiRouter.use(async (req, _res, next) => {
 });
 
 apiRouter.use('/user', userRouter);
+apiRouter.use('/workspaces', workspacesRouter);
 apiRouter.use('/notes', notesRouter);
 apiRouter.use('/folders', foldersRouter);
 apiRouter.use('/push', pushRouter);

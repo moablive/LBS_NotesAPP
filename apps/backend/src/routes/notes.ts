@@ -3,11 +3,66 @@ import { db, schema } from '@notesapp/db';
 import { eq, and, sql, isNull, isNotNull } from 'drizzle-orm';
 import { createNoteSchema, updateNoteSchema } from '@notesapp/models';
 import crypto from 'crypto';
-import { resolveTelegramId } from '../middleware/telegram-id.js';
+import { ensureWorkspace } from './workspaces.js';
 
 export const notesRouter = Router();
 
-notesRouter.use(resolveTelegramId);
+
+/** O workspace existe e é do usuário? */
+async function ownsWorkspace(loginhubId: string, workspaceId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: schema.workspaces.id })
+    .from(schema.workspaces)
+    .where(
+      and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.userId, loginhubId)),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function workspaceOfNote(loginhubId: string, noteId: string): Promise<string | null> {
+  const rows = await db
+    .select({ workspaceId: schema.notes.workspaceId })
+    .from(schema.notes)
+    .where(and(eq(schema.notes.id, noteId), eq(schema.notes.userId, loginhubId)))
+    .limit(1);
+  return rows[0]?.workspaceId ?? null;
+}
+
+/**
+ * Workspace onde a nota deve nascer: o do pai (sub-árvore nunca se divide), o
+ * pedido pelo cliente, ou o primeiro do usuário como último recurso.
+ */
+async function resolveWorkspaceId(
+  loginhubId: string,
+  requested: string | null,
+  parentId: string | null,
+): Promise<string | null> {
+  if (parentId) {
+    const inherited = await workspaceOfNote(loginhubId, parentId);
+    if (inherited) return inherited;
+  }
+  if (requested) return requested;
+  const workspaces = await ensureWorkspace(loginhubId);
+  return workspaces[0]?.id ?? null;
+}
+
+/** Move a nota e TODA a sub-árvore dela para um workspace. */
+async function moveSubtreeToWorkspace(
+  loginhubId: string,
+  noteId: string,
+  workspaceId: string,
+): Promise<void> {
+  await db.execute(sql`
+    WITH RECURSIVE sub AS (
+      SELECT id FROM notes WHERE id = ${noteId} AND user_id = ${loginhubId}
+      UNION ALL
+      SELECT n.id FROM notes n JOIN sub ON n.parent_id = sub.id
+    )
+    UPDATE notes SET workspace_id = ${workspaceId}
+    WHERE user_id = ${loginhubId} AND id IN (SELECT id FROM sub)
+  `);
+}
 
 /**
  * Extrai os IDs de notas linkadas do conteúdo HTML (Grafo).
@@ -26,7 +81,7 @@ function extractLinks(content: string): string[] {
  * Retorna uma mensagem de erro (string) se inválido, ou null se ok.
  */
 async function validateParent(
-  telegramId: string,
+  loginhubId: string,
   parentId: string,
   selfId: string | null,
 ): Promise<string | null> {
@@ -41,7 +96,7 @@ async function validateParent(
     const rows: { id: string, parentId: string | null }[] = await db
       .select({ id: schema.notes.id, parentId: schema.notes.parentId })
       .from(schema.notes)
-      .where(and(eq(schema.notes.id, current), eq(schema.notes.userId, telegramId)))
+      .where(and(eq(schema.notes.id, current), eq(schema.notes.userId, loginhubId)))
       .limit(1);
     const row = rows[0];
     if (!row) return 'nota pai inexistente';
@@ -51,26 +106,45 @@ async function validateParent(
   return null;
 }
 
-/** Próxima posição (order) entre as irmãs do mesmo pai. */
-async function nextOrder(telegramId: string, parentId: string | null): Promise<number> {
+import { max as maxFn } from 'drizzle-orm';
+
+async function nextOrder(
+  loginhubId: string,
+  parentId: string | null,
+  workspaceId: string | null,
+): Promise<number> {
   const rows = await db
-    .select({ max: sql<number>`coalesce(max(${schema.notes.order}), -1)` })
+    .select({ max: maxFn(schema.notes.order) })
     .from(schema.notes)
     .where(
       and(
-        eq(schema.notes.userId, telegramId),
+        eq(schema.notes.userId, loginhubId),
         parentId === null
-          ? sql`${schema.notes.parentId} is null`
+          ? isNull(schema.notes.parentId)
           : eq(schema.notes.parentId, parentId),
+        // Notas raiz são ordenadas dentro do próprio workspace.
+        ...(parentId === null && workspaceId
+          ? [eq(schema.notes.workspaceId, workspaceId)]
+          : []),
       ),
     );
   return (rows[0]?.max ?? -1) + 1;
 }
 
+/** `?workspaceId=` — filtra pelo workspace ativo; ausente = todos (bot/legado). */
+function workspaceFilter(req: any) {
+  const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : null;
+  return workspaceId ? [eq(schema.notes.workspaceId, workspaceId)] : [];
+}
+
 notesRouter.get('/', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   const notes = await db.query.notes.findMany({
-    where: and(eq(schema.notes.userId, telegramId), isNull(schema.notes.deletedAt)),
+    where: and(
+      eq(schema.notes.userId, loginhubId),
+      isNull(schema.notes.deletedAt),
+      ...workspaceFilter(req),
+    ),
     orderBy: (notes, { asc, desc }) => [asc(notes.order), desc(notes.updatedAt)],
   });
   res.json(notes);
@@ -121,38 +195,49 @@ notesRouter.get('/:id/backlinks', async (req, res) => {
 
 // Notas na lixeira (soft-deleted), mais recentes primeiro.
 notesRouter.get('/trash', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   const notes = await db.query.notes.findMany({
-    where: and(eq(schema.notes.userId, telegramId), isNotNull(schema.notes.deletedAt)),
+    where: and(
+      eq(schema.notes.userId, loginhubId),
+      isNotNull(schema.notes.deletedAt),
+      ...workspaceFilter(req),
+    ),
     orderBy: (notes, { desc }) => [desc(notes.deletedAt)],
   });
   res.json(notes);
 });
 
 notesRouter.post('/', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   const parsed = createNoteSchema.parse(req.body);
   const parentId = parsed.parentId || null;
 
   if (parentId) {
-    const err = await validateParent(telegramId, parentId, null);
+    const err = await validateParent(loginhubId, parentId, null);
     if (err) return res.status(400).json({ error: 'invalid_parent', message: err });
   }
 
+  if (parsed.workspaceId && !(await ownsWorkspace(loginhubId, parsed.workspaceId))) {
+    return res.status(400).json({ error: 'invalid_workspace' });
+  }
+
   const id = crypto.randomUUID(); // NotesAPP uses full UUID, or 36 length for id
-  const order = parsed.order ?? (await nextOrder(telegramId, parentId));
+  const workspaceId = await resolveWorkspaceId(loginhubId, parsed.workspaceId || null, parentId);
+  const order = parsed.order ?? (await nextOrder(loginhubId, parentId, workspaceId));
 
   const inserted = await db.insert(schema.notes).values({
     id,
-    userId: telegramId,
+    userId: loginhubId,
     title: parsed.title,
     content: parsed.content || null,
     folderId: parsed.folderId || null,
     parentId,
+    workspaceId,
     order,
     isEvergreen: parsed.isEvergreen || false,
     isFavorite: parsed.isFavorite || false,
     coverImage: parsed.coverImage || null,
+    coverPositionY: parsed.coverPositionY ?? 50,
     icon: parsed.icon || null,
   }).returning();
 
@@ -172,15 +257,30 @@ notesRouter.post('/', async (req, res) => {
 });
 
 notesRouter.patch('/:id', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   const parsed = updateNoteSchema.parse(req.body);
 
   if (parsed.parentId !== undefined && parsed.parentId) {
-    const err = await validateParent(telegramId, parsed.parentId, req.params.id);
+    const err = await validateParent(loginhubId, parsed.parentId, req.params.id);
     if (err) return res.status(400).json({ error: 'invalid_parent', message: err });
   }
 
+  // Mudou de pai ou de workspace? A nota inteira (com a sub-árvore) muda de
+  // workspace: explicitamente, ou herdando o do novo pai.
+  let targetWorkspaceId: string | null = null;
+  if (parsed.workspaceId !== undefined || parsed.parentId !== undefined) {
+    if (parsed.workspaceId) {
+      if (!(await ownsWorkspace(loginhubId, parsed.workspaceId))) {
+        return res.status(400).json({ error: 'invalid_workspace' });
+      }
+      targetWorkspaceId = parsed.workspaceId;
+    } else if (parsed.parentId) {
+      targetWorkspaceId = await workspaceOfNote(loginhubId, parsed.parentId);
+    }
+  }
+
   const updates: any = { updatedAt: new Date() };
+  if (targetWorkspaceId) updates.workspaceId = targetWorkspaceId;
   if (parsed.title !== undefined) updates.title = parsed.title;
   if (parsed.content !== undefined) updates.content = parsed.content || null;
   if (parsed.folderId !== undefined) updates.folderId = parsed.folderId || null;
@@ -189,11 +289,14 @@ notesRouter.patch('/:id', async (req, res) => {
   if (parsed.isEvergreen !== undefined) updates.isEvergreen = parsed.isEvergreen;
   if (parsed.isFavorite !== undefined) updates.isFavorite = parsed.isFavorite;
   if (parsed.coverImage !== undefined) updates.coverImage = parsed.coverImage || null;
+  // Reposicionamento da capa (0–100%). Sem isto o PATCH descartava o valor e a
+  // posição voltava para 50% no próximo fetch.
+  if (parsed.coverPositionY !== undefined) updates.coverPositionY = parsed.coverPositionY;
   if (parsed.icon !== undefined) updates.icon = parsed.icon || null;
 
   const updated = await db.update(schema.notes)
     .set(updates)
-    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, telegramId)))
+    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, loginhubId)))
     .returning();
 
   if (!updated.length) return res.status(404).json({ error: 'not_found' });
@@ -212,21 +315,25 @@ notesRouter.patch('/:id', async (req, res) => {
     }
   }
 
+  if (targetWorkspaceId) {
+    await moveSubtreeToWorkspace(loginhubId, req.params.id, targetWorkspaceId);
+  }
+
   res.json(updated[0]);
 });
 
 // Mover para a LIXEIRA (soft delete). A nota e TODA a sua sub-árvore recebem
 // deleted_at — nada é removido de fato; dá para restaurar depois.
 notesRouter.delete('/:id', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   await db.execute(sql`
     WITH RECURSIVE sub AS (
-      SELECT id FROM notes WHERE id = ${req.params.id} AND user_id = ${telegramId}
+      SELECT id FROM notes WHERE id = ${req.params.id} AND user_id = ${loginhubId}
       UNION ALL
       SELECT n.id FROM notes n JOIN sub ON n.parent_id = sub.id
     )
     UPDATE notes SET deleted_at = now(), updated_at = now()
-    WHERE user_id = ${telegramId} AND id IN (SELECT id FROM sub)
+    WHERE user_id = ${loginhubId} AND id IN (SELECT id FROM sub)
   `);
   res.status(204).send();
 });
@@ -235,27 +342,27 @@ notesRouter.delete('/:id', async (req, res) => {
 // original sumiu ou ainda está na lixeira, a nota volta como raiz (evita ficar
 // invisível pendurada num pai inexistente).
 notesRouter.post('/:id/restore', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   await db.execute(sql`
     WITH RECURSIVE sub AS (
-      SELECT id FROM notes WHERE id = ${req.params.id} AND user_id = ${telegramId}
+      SELECT id FROM notes WHERE id = ${req.params.id} AND user_id = ${loginhubId}
       UNION ALL
       SELECT n.id FROM notes n JOIN sub ON n.parent_id = sub.id
     )
     UPDATE notes SET deleted_at = NULL, updated_at = now()
-    WHERE user_id = ${telegramId} AND id IN (SELECT id FROM sub)
+    WHERE user_id = ${loginhubId} AND id IN (SELECT id FROM sub)
   `);
   await db.execute(sql`
     UPDATE notes SET parent_id = NULL
-    WHERE id = ${req.params.id} AND user_id = ${telegramId} AND parent_id IS NOT NULL
+    WHERE id = ${req.params.id} AND user_id = ${loginhubId} AND parent_id IS NOT NULL
       AND parent_id NOT IN (
-        SELECT id FROM notes WHERE user_id = ${telegramId} AND deleted_at IS NULL
+        SELECT id FROM notes WHERE user_id = ${loginhubId} AND deleted_at IS NULL
       )
   `);
   const rows = await db
     .select()
     .from(schema.notes)
-    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, telegramId)))
+    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, loginhubId)))
     .limit(1);
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
   res.json(rows[0]);
@@ -264,16 +371,21 @@ notesRouter.post('/:id/restore', async (req, res) => {
 // Apagar DEFINITIVAMENTE (só a partir da lixeira). Remove a linha de vez; a
 // FK notes_parent_id_fkey (ON DELETE CASCADE) leva junto a sub-árvore.
 notesRouter.delete('/:id/permanent', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   await db.delete(schema.notes)
-    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, telegramId)));
+    .where(and(eq(schema.notes.id, req.params.id), eq(schema.notes.userId, loginhubId)));
   res.status(204).send();
 });
 
-// Esvaziar a lixeira: apaga definitivamente tudo que está com deleted_at.
+// Esvaziar a lixeira: apaga definitivamente tudo que está com deleted_at
+// (restrito ao workspace quando vem `?workspaceId=`).
 notesRouter.post('/trash/empty', async (req, res) => {
-  const telegramId = (req as any).telegramId;
+  const loginhubId = String(req.user!.loginhubId);
   await db.delete(schema.notes)
-    .where(and(eq(schema.notes.userId, telegramId), isNotNull(schema.notes.deletedAt)));
+    .where(and(
+      eq(schema.notes.userId, loginhubId),
+      isNotNull(schema.notes.deletedAt),
+      ...workspaceFilter(req),
+    ));
   res.status(204).send();
 });

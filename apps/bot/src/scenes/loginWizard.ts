@@ -1,7 +1,7 @@
 import { Scenes, Markup } from 'telegraf';
 import type { BotContext } from '../context.js';
 import { env } from '../config.js';
-import { botApi } from '@todo/api-client';
+import { botApi } from '@notes/api-client';
 import { markLinked } from '../auth.js';
 import { menuKeyboard } from '../ui/menu.js';
 

@@ -1,6 +1,5 @@
 import pg from 'pg';
-import crypto from 'crypto';
-import type { Task, TaskGroup } from '../models/index.js';
+import type { NoteSummary, Paged, WorkspaceSummary } from '../models/index.js';
 
 const { Pool } = pg;
 
@@ -8,87 +7,27 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+/**
+ * Chaves de dono a consultar para um telegramId.
+ *
+ * O backend resolve o dono da nota como `user_settings.telegram_id` quando o
+ * Telegram está vinculado, e como o `loginhub_id` enquanto não está
+ * (ver middleware/telegram-id.ts). Como o vínculo NÃO migra as notas antigas,
+ * quem já usava o site antes de vincular tem notas gravadas sob o loginhub_id
+ * e notas novas sob o telegramId. Consultar as duas chaves é o que faz a
+ * listagem mostrar tudo que é do usuário.
+ */
+async function ownerKeys(telegramId: string): Promise<string[]> {
+  const result = await pool.query(
+    'SELECT loginhub_id FROM user_settings WHERE telegram_id = $1 LIMIT 1',
+    [telegramId]
+  );
+  const loginhubId = result.rows[0]?.loginhub_id;
+  return loginhubId == null ? [] : [String(loginhubId)];
+}
+
 export const botApi = {
-  getAllBotUsers: async (): Promise<{ id: string, telegramId: string }[]> => {
-    const result = await pool.query('SELECT DISTINCT user_id FROM tasks');
-    return result.rows.map(row => ({ id: row.user_id, telegramId: row.user_id }));
-  },
-
-  createGroup: async (userId: string, name: string): Promise<TaskGroup> => {
-    const id = crypto.randomUUID().slice(0, 8);
-    const createdAt = new Date().toISOString();
-    
-    await pool.query(
-      'INSERT INTO task_groups (id, user_id, name, created_at) VALUES ($1, $2, $3, $4)',
-      [id, userId, name, new Date(createdAt)]
-    );
-
-    return { id, userId, name, createdAt };
-  },
-
-  listGroups: async (userId: string): Promise<TaskGroup[]> => {
-    const result = await pool.query('SELECT id, user_id, name, created_at FROM task_groups WHERE user_id = $1 ORDER BY created_at ASC', [userId]);
-    return result.rows.map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      name: row.name,
-      createdAt: row.created_at.toISOString()
-    }));
-  },
-
-  deleteGroup: async (userId: string, groupId: string): Promise<void> => {
-    await pool.query('DELETE FROM task_groups WHERE user_id = $1 AND id = $2', [userId, groupId]);
-  },
-
-  addTask: async (userId: string, description: string, scheduledAt?: string, groupId?: string): Promise<Task> => {
-    const id = crypto.randomUUID().slice(0, 8);
-    const createdAt = new Date().toISOString();
-    
-    await pool.query(
-      'INSERT INTO tasks (id, user_id, description, scheduled_at, created_at, group_id, is_flagged, is_urgent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [id, userId, description, scheduledAt ? new Date(scheduledAt) : null, new Date(createdAt), groupId || null, false, false]
-    );
-
-    return {
-      id,
-      description,
-      scheduledAt: scheduledAt || null,
-      createdAt,
-      groupId
-    };
-  },
-
-  listTasks: async (userId: string): Promise<Task[]> => {
-    const result = await pool.query(`
-      SELECT t.id, t.description, t.scheduled_at, t.created_at, t.group_id, g.name as group_name, t.is_flagged, t.is_urgent, t.priority, t.recurrence
-      FROM tasks t
-      LEFT JOIN task_groups g ON t.group_id = g.id
-      WHERE t.user_id = $1 AND t.completed_at IS NULL
-      ORDER BY t.created_at ASC
-    `, [userId]);
-    return result.rows.map(row => ({
-      id: row.id,
-      description: row.description,
-      scheduledAt: row.scheduled_at ? row.scheduled_at.toISOString() : null,
-      createdAt: row.created_at.toISOString(),
-      groupId: row.group_id || undefined,
-      groupName: row.group_name || undefined,
-      isFlagged: row.is_flagged,
-      isUrgent: row.is_urgent,
-      priority: row.priority || 'low',
-      recurrence: row.recurrence || null
-    }));
-  },
-
-  removeTask: async (userId: string, taskId: string): Promise<void> => {
-    await pool.query('DELETE FROM tasks WHERE user_id = $1 AND id = $2', [userId, taskId]);
-  },
-  
-  completeTask: async (userId: string, taskId: string): Promise<void> => {
-    await pool.query('UPDATE tasks SET completed_at = NOW() WHERE user_id = $1 AND id = $2', [userId, taskId]);
-  },
-
-  // Usuário já vinculou o Telegram? (login via bot, padrão MoneyAPP)
+  /** Usuário já vinculou o Telegram? (login via bot, padrão MoneyAPP) */
   getUserByTelegramId: async (telegramId: string): Promise<{ loginhubId: number } | null> => {
     const result = await pool.query(
       'SELECT loginhub_id FROM user_settings WHERE telegram_id = $1 LIMIT 1',
@@ -98,12 +37,12 @@ export const botApi = {
     return row ? { loginhubId: row.loginhub_id } : null;
   },
 
-  // Vincula o telegramId ao usuário do LoginHub. No NotesAPP os dados ficam
-  // sempre sob o loginhub_id (não há namespace provisório por telegram_id como
-  // no TodoAPP), então o vínculo é só o upsert em user_settings.
-  // ⚠️ NÃO migrar tasks/task_groups/reminder_settings aqui: essas tabelas são do
-  // TodoAPP e NÃO existem no banco notesapp — o UPDATE dava 42P01, ROLLBACK e o
-  // login inteiro falhava.
+  /**
+   * Vincula o telegramId ao usuário do LoginHub.
+   * ⚠️ NÃO migrar tasks/task_groups/reminder_settings aqui: essas tabelas são do
+   * TodoAPP e NÃO existem no banco notesapp — o UPDATE dava 42P01, ROLLBACK e o
+   * login inteiro falhava.
+   */
   linkTelegram: async (loginhubId: number, telegramId: string): Promise<void> => {
     await pool.query(
       `INSERT INTO user_settings (loginhub_id, telegram_id) VALUES ($1, $2)
@@ -112,99 +51,78 @@ export const botApi = {
     );
   },
 
-  getReminderSettings: async (userId: string): Promise<ReminderSettings> => {
+  /**
+   * Workspaces = linhas da tabela `workspaces` (ambientes de trabalho do site),
+   * com a contagem de notas ativas dentro de cada um. Antes daqui saíam as notas
+   * raiz, que era o que fazia papel de workspace antes da tabela existir.
+   */
+  listWorkspaces: async (telegramId: string, limit = 30): Promise<Paged<WorkspaceSummary>> => {
+    const keys = await ownerKeys(telegramId);
     const result = await pool.query(
-      `SELECT remind_at_time, remind_before_enabled, remind_before_minutes,
-              remind_days_enabled, remind_days_before, notify_push, notify_telegram, display_name,
-              morning_digest_enabled, morning_digest_time, afternoon_digest_enabled, afternoon_digest_time,
-              night_digest_enabled, night_digest_time, notification_style, notified_categories
-       FROM reminder_settings WHERE user_id = $1`,
-      [userId]
+      `SELECT w.id,
+              w.name AS title,
+              w.icon,
+              COALESCE(
+                (SELECT max(n.updated_at) FROM notes n
+                  WHERE n.workspace_id = w.id AND n.deleted_at IS NULL),
+                w.created_at
+              ) AS updated_at,
+              (SELECT count(*) FROM notes n
+                WHERE n.workspace_id = w.id AND n.deleted_at IS NULL) AS child_count,
+              count(*) OVER () AS total
+         FROM workspaces w
+        WHERE w.user_id = ANY($1)
+        ORDER BY w."order" ASC, w.created_at ASC
+        LIMIT $2`,
+      [keys, limit]
     );
-    const row = result.rows[0];
-    if (!row) return { ...defaultReminderSettings };
+
     return {
-      remindAtTime: row.remind_at_time,
-      remindBeforeEnabled: row.remind_before_enabled,
-      remindBeforeMinutes: row.remind_before_minutes,
-      remindDaysEnabled: row.remind_days_enabled,
-      remindDaysBefore: row.remind_days_before,
-      notifyPush: row.notify_push,
-      notifyTelegram: row.notify_telegram,
-      displayName: row.display_name ?? null,
-      morningDigestEnabled: row.morning_digest_enabled ?? true,
-      morningDigestTime: row.morning_digest_time ?? "08:00",
-      afternoonDigestEnabled: row.afternoon_digest_enabled ?? true,
-      afternoonDigestTime: row.afternoon_digest_time ?? "13:00",
-      nightDigestEnabled: row.night_digest_enabled ?? false,
-      nightDigestTime: row.night_digest_time ?? "20:00",
-      notificationStyle: row.notification_style ?? "all",
-      notifiedCategories: row.notified_categories ?? [],
-      notifiedPriorities: row.notified_priorities ?? [],
-      notificationPeriod: row.notification_period ?? "all",
-      digestTodayOnly: row.digest_today_only ?? false,
+      total: Number(result.rows[0]?.total ?? 0),
+      items: result.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        icon: row.icon ?? null,
+        childCount: Number(row.child_count ?? 0),
+        updatedAt: row.updated_at.toISOString(),
+      })),
     };
   },
 
-  getPushSubscriptions: async (userId: string): Promise<PushSubscriptionRow[]> => {
+  /** Notas ativas (fora da lixeira), mais recentes primeiro. */
+  listNotes: async (telegramId: string, limit = 20): Promise<Paged<NoteSummary>> => {
+    const keys = await ownerKeys(telegramId);
     const result = await pool.query(
-      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1',
-      [userId]
+      `SELECT n.id,
+              n.title,
+              n.icon,
+              n.is_favorite,
+              n.is_evergreen,
+              n.parent_id,
+              n.updated_at,
+              p.title AS parent_title,
+              count(*) OVER () AS total
+         FROM notes n
+         LEFT JOIN notes p ON p.id = n.parent_id
+        WHERE n.user_id = ANY($1)
+          AND n.deleted_at IS NULL
+        ORDER BY n.updated_at DESC
+        LIMIT $2`,
+      [keys, limit]
     );
-    return result.rows;
+
+    return {
+      total: Number(result.rows[0]?.total ?? 0),
+      items: result.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        icon: row.icon ?? null,
+        isFavorite: row.is_favorite,
+        isEvergreen: row.is_evergreen,
+        parentId: row.parent_id ?? null,
+        parentTitle: row.parent_title ?? null,
+        updatedAt: row.updated_at.toISOString(),
+      })),
+    };
   },
-
-  deletePushSubscription: async (endpoint: string): Promise<void> => {
-    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
-  }
-};
-
-export interface ReminderSettings {
-  remindAtTime: boolean;
-  remindBeforeEnabled: boolean;
-  remindBeforeMinutes: number;
-  remindDaysEnabled: boolean;
-  remindDaysBefore: number;
-  notifyPush: boolean;
-  notifyTelegram: boolean;
-  displayName: string | null;
-  morningDigestEnabled: boolean;
-  morningDigestTime: string;
-  afternoonDigestEnabled: boolean;
-  afternoonDigestTime: string;
-  nightDigestEnabled: boolean;
-  nightDigestTime: string;
-  notificationStyle: 'all' | 'category' | 'priority';
-  notifiedCategories: string[];
-  notifiedPriorities: ('low' | 'medium' | 'high')[];
-  notificationPeriod: 'today' | 'all';
-  digestTodayOnly: boolean;
-}
-
-export interface PushSubscriptionRow {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-}
-
-export const defaultReminderSettings: ReminderSettings = {
-  remindAtTime: true,
-  remindBeforeEnabled: true,
-  remindBeforeMinutes: 30,
-  remindDaysEnabled: true,
-  remindDaysBefore: 7,
-  notifyPush: true,
-  notifyTelegram: true,
-  displayName: null,
-  morningDigestEnabled: true,
-  morningDigestTime: "08:00",
-  afternoonDigestEnabled: true,
-  afternoonDigestTime: "13:00",
-  nightDigestEnabled: false,
-  nightDigestTime: "20:00",
-  notificationStyle: 'all',
-  notifiedCategories: [],
-  notifiedPriorities: [],
-  notificationPeriod: 'all',
-  digestTodayOnly: false,
 };

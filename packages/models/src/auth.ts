@@ -15,4 +15,5 @@ export interface LoginHubPayload {
   loginhubId: number;
   email: string;
   sub?: string;
+  app_id?: number | string;
 }

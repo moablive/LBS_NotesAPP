@@ -12,11 +12,11 @@
 # =============================================================================
 
 services:
-  app_notesapp_backend:
+  lbs_notesapp_backend:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
-    container_name: app_notesapp_backend
+    container_name: lbs_notesapp_backend
     env_file:
     - ../shared.env
     - .env
@@ -39,17 +39,18 @@ services:
       retries: 3
       start_period: 20s
 
-  app_notesapp_frontend:
+  lbs_notesapp_frontend:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
         VITE_LOGINHUB_API_URL: ${VITE_LOGINHUB_API_URL}
+        VITE_API_URL: ${VITE_API_URL}
         VITE_LOGINHUB_APP_ID: ${VITE_LOGINHUB_APP_ID}
-    container_name: app_notesapp_frontend
+    container_name: lbs_notesapp_frontend
     depends_on:
-      app_notesapp_backend:
+      lbs_notesapp_backend:
         condition: service_healthy
     networks:
       awl_network:
@@ -57,10 +58,10 @@ services:
         - notesapp_frontend
     restart: unless-stopped
 
-  app_notesapp_bot:
+  lbs_notesapp_bot:
     build:
       context: apps/bot
-    container_name: app_notesapp_bot
+    container_name: lbs_notesapp_bot
     env_file:
       - ../shared.env
       - .env

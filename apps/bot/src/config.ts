@@ -11,11 +11,6 @@ const envSchema = z.object({
   // App id do NotesAPP no LoginHub (NÃO usar o do TodoAPP=4, senão o login é
   // validado no tenant errado). Sobrescrito pelo .env em produção.
   LOGINHUB_APP_ID: z.coerce.number().default(11),
-  // Web Push (VAPID) — mesmas chaves do backend; opcional, sem elas o bot só
-  // envia lembretes pelo Telegram.
-  VAPID_PUBLIC_KEY: z.string().optional(),
-  VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().default('mailto:admin@astralwavelabel.com'),
 });
 
 const parsed = envSchema.safeParse(process.env);

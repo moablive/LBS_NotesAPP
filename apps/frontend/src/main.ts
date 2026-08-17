@@ -3,6 +3,8 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import './styles/main.css';
+// Tema dos blocos de código (tokens do highlight.js precisam ser globais).
+import './styles/dracula.css';
 
 import { setupApi } from '@notesapp/api-client';
 import { useAuthStore } from './stores/auth';
