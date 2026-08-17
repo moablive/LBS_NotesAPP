@@ -461,15 +461,14 @@ const handleEsc = (e: KeyboardEvent) => {
 onMounted(async () => {
   document.addEventListener('keydown', handleEsc);
   try {
-    const [s, p, g] = await Promise.all([
-      api.get<ReminderSettings>('/reminders'),
-      api.get<UserPrefs>('/prefs'),
-      api.get<TaskGroup[]>('/groups')
-    ]);
-    settings.value = s;
+    // Só /reminders existe no backend do NotesAPP. /prefs e /groups eram do
+    // TodoAPP (kanban, calendário, grupos de tarefa) e devolviam 404 — dentro
+    // de um Promise.all isso derrubava o carregamento inteiro do modal, então
+    // nenhuma configuração aparecia. Os campos que dependiam deles seguem com
+    // os defaults locais até serem removidos da tela.
+    const s = await api.get<ReminderSettings>('/reminders');
+    settings.value = { ...settings.value, ...s };
     displayNameInput.value = s.displayName || '';
-    prefs.value = p;
-    taskGroups.value = g;
   } catch (err) {
     console.error('Erro ao carregar configurações:', err);
   } finally {
@@ -496,10 +495,9 @@ async function save() {
   settings.value.remindDaysBefore = Math.min(60, Math.max(1, Math.round(Number(settings.value.remindDaysBefore) || 7)));
   settings.value.displayName = displayNameInput.value.trim() || null;
   try {
-    await Promise.all([
-      api.patch<ReminderSettings>('/reminders', settings.value),
-      api.patch<UserPrefs>('/prefs', prefs.value)
-    ]);
+    // Só o que o backend do NotesAPP aceita: campos desconhecidos são
+    // descartados pelo zod do lado do servidor.
+    await api.patch<ReminderSettings>('/reminders', settings.value);
     window.location.reload();
     emit('close');
   } catch (err) {

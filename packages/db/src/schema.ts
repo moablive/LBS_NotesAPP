@@ -31,12 +31,37 @@ export const userSettings = pgTable("user_settings", {
   telegramId: varchar("telegram_id", { length: 50 }).unique(),
 });
 
+// Workspaces (ambientes de trabalho estilo Notion): cada um é uma árvore de
+// notas independente. O usuário troca de workspace no seletor da sidebar e só
+// vê as notas de dentro dele. Apagar o workspace apaga as notas (cascade nas
+// FKs abaixo).
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 50 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    icon: text("icon"),
+    order: integer("order").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    userIdx: index("workspaces_user_idx").on(t.userId),
+  })
+);
+
 // Pastas para hierarquia estilo Notion
 export const folders = pgTable("folders", {
   id: varchar("id", { length: 36 }).primaryKey(),
   userId: varchar("user_id", { length: 50 }).notNull(),
   name: varchar("name", { length: 120 }).notNull(),
   parentId: varchar("parent_id", { length: 36 }), // null para pastas raiz
+  workspaceId: varchar("workspace_id", { length: 36 }).references(
+    () => workspaces.id,
+    { onDelete: "cascade" }
+  ),
   icon: text("icon"),
   order: integer("order").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -55,9 +80,16 @@ export const notes = pgTable(
     folderId: varchar("folder_id", { length: 36 }).references(() => folders.id, {
       onDelete: "set null",
     }),
+    // Workspace a que a nota pertence. Toda a sub-árvore de uma nota vive no
+    // mesmo workspace do topo dela.
+    workspaceId: varchar("workspace_id", { length: 36 }).references(
+      () => workspaces.id,
+      { onDelete: "cascade" }
+    ),
     isEvergreen: boolean("is_evergreen").default(false).notNull(),
     isFavorite: boolean("is_favorite").default(false).notNull(),
     coverImage: text("cover_image"),
+    coverPositionY: integer("cover_position_y").default(50).notNull(),
     icon: text("icon"),
     // Zettelkasten / Reminders
     remindAt: timestamp("remind_at", { withTimezone: true }),
@@ -86,6 +118,7 @@ export const notes = pgTable(
   (t) => ({
     userIdx: index("notes_user_idx").on(t.userId),
     folderIdx: index("notes_folder_idx").on(t.folderId),
+    workspaceIdx: index("notes_workspace_idx").on(t.userId, t.workspaceId),
     parentIdx: index("notes_parent_idx").on(t.parentId),
     deletedIdx: index("notes_deleted_idx").on(t.userId, t.deletedAt),
   })
@@ -163,6 +196,11 @@ export const reminderSettings = pgTable("reminder_settings", {
 });
 
 // Relacionamentos (Drizzle)
+export const workspacesRelations = relations(workspaces, ({ many }) => ({
+  notes: many(notes),
+  folders: many(folders),
+}));
+
 export const foldersRelations = relations(folders, ({ one, many }) => ({
   parent: one(folders, {
     fields: [folders.parentId],
@@ -170,6 +208,10 @@ export const foldersRelations = relations(folders, ({ one, many }) => ({
     relationName: "parentFolder",
   }),
   children: many(folders, { relationName: "parentFolder" }),
+  workspace: one(workspaces, {
+    fields: [folders.workspaceId],
+    references: [workspaces.id],
+  }),
   notes: many(notes),
 }));
 
@@ -177,6 +219,10 @@ export const notesRelations = relations(notes, ({ one, many }) => ({
   folder: one(folders, {
     fields: [notes.folderId],
     references: [folders.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [notes.workspaceId],
+    references: [workspaces.id],
   }),
   parent: one(notes, {
     fields: [notes.parentId],
@@ -217,6 +263,8 @@ export const noteLinksRelations = relations(noteLinks, ({ one }) => ({
   }),
 }));
 
+export type Workspace = typeof workspaces.$inferSelect;
+export type NewWorkspace = typeof workspaces.$inferInsert;
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
 export type Folder = typeof folders.$inferSelect;

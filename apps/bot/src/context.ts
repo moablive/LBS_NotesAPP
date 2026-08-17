@@ -1,8 +1,8 @@
 import { Context, Scenes } from 'telegraf';
 
 export interface MyWizardSession extends Scenes.WizardSessionData {
-  taskDescription?: string;
-  taskDate?: string;
+  /** E-mail digitado no LOGIN_WIZARD, guardado entre os passos. */
+  loginEmail?: string;
 }
 
 export interface MySession extends Scenes.SceneSession<MyWizardSession> {

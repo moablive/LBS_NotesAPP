@@ -6,9 +6,11 @@ export const createNoteSchema = z.object({
   content: z.string().nullable().optional(),
   folderId: z.string().nullable().optional(), // Using string since DB schema uses varchar(36)
   parentId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
   isEvergreen: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
   coverImage: z.string().nullable().optional(),
+  coverPositionY: z.number().int().min(0).max(100).optional(),
   icon: z.string().nullable().optional(),
   order: z.number().int().optional(),
 });

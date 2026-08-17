@@ -20,6 +20,7 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:admin@astralwavelabel.com'),
+  LOGINHUB_APP_ID: z.coerce.number().int().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

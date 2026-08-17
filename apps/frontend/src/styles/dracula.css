@@ -1,0 +1,168 @@
+/**
+ * Tema Dracula para os blocos de código.
+ *
+ * Paleta oficial (draculatheme.com) escrita direto em CSS em vez de clonar e
+ * buildar a extensão do VS Code: o que se precisa dela são estas 11 cores, e
+ * assim o bundle continua sem dependência externa. Trocar de tema = trocar
+ * este arquivo.
+ *
+ * As cores dos tokens precisam ser globais: o highlight é aplicado como
+ * decoração do ProseMirror (spans .hljs-* injetados), fora do escopo do
+ * componente Vue.
+ */
+:root {
+  --dracula-bg: #282a36;
+  --dracula-current: #353746; /* "Current line background" do tema */
+  --dracula-guide: #3e404a; /* "Indent guideline" — bordas discretas */
+  --dracula-selection: #5a5d72; /* "Selected text colour" */
+  --dracula-fg: #f8f8f2;
+  --dracula-comment: #7c8eb2;
+  --dracula-cyan: #8be9fd;
+  --dracula-green: #50fa7b;
+  --dracula-orange: #ffb86c;
+  --dracula-pink: #ff79c6;
+  --dracula-purple: #bd93f9;
+  --dracula-red: #ff5555;
+  --dracula-yellow: #f1fa8c;
+}
+
+/* ── Caixa do bloco ─────────────────────────────────────────────────────── */
+.code-block {
+  position: relative;
+  margin: 0.75rem 0;
+  border-radius: 10px;
+  background: var(--dracula-bg);
+  border: 1px solid var(--dracula-current);
+  overflow: hidden;
+}
+.code-block pre {
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  overflow-x: auto;
+  background: transparent;
+}
+.code-block code {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dracula-fg);
+  background: transparent;
+  white-space: pre;
+  tab-size: 2;
+  /* Caret e seleção também vêm do tema (Caret colour / Selected text colour). */
+  caret-color: var(--dracula-cyan);
+}
+.code-block code ::selection,
+.code-block code::selection {
+  background: var(--dracula-selection);
+  color: var(--dracula-fg);
+}
+
+/* ── Barra de linguagem / copiar ────────────────────────────────────────── */
+.code-block__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--dracula-current);
+  background: rgba(0, 0, 0, 0.18);
+}
+.code-block__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.code-block__lang,
+.code-block__copy,
+.code-block__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dracula-comment);
+  transition: color 0.15s, background 0.15s;
+}
+.code-block__lang:hover,
+.code-block__copy:hover {
+  color: var(--dracula-fg);
+  background: var(--dracula-current);
+}
+.code-block__delete:hover {
+  color: var(--dracula-red);
+  background: var(--dracula-current);
+}
+/* ── Tokens (highlight.js) ───────────────────────────────────────────────
+   Mapeamento tirado do tema Dracula do Notepad++ (Dracula Theme, MIT):
+   COMMENT→7C8EB2 · KEYWORD/OPERATOR→FF79C6 · STRING→F1FA8C · NUMBER→FFB86C
+   IDENTIFIER/VARIABLE→8BE9FD · TYPE/CLASS/BUILTIN→BD93F9 · FUNCTION→50FA7B  */
+.code-block .hljs-comment,
+.code-block .hljs-quote {
+  color: var(--dracula-comment);
+}
+.code-block .hljs-keyword,
+.code-block .hljs-selector-tag,
+.code-block .hljs-doctag,
+.code-block .hljs-tag,
+.code-block .hljs-operator,
+.code-block .hljs-punctuation,
+.code-block .hljs-section,
+.code-block .hljs-meta .hljs-keyword {
+  color: var(--dracula-pink);
+}
+.code-block .hljs-string,
+.code-block .hljs-meta .hljs-string,
+.code-block .hljs-regexp,
+.code-block .hljs-char.escape_,
+.code-block .hljs-addition {
+  color: var(--dracula-yellow);
+}
+.code-block .hljs-number {
+  color: var(--dracula-orange);
+}
+.code-block .hljs-literal,
+.code-block .hljs-symbol,
+.code-block .hljs-attr,
+.code-block .hljs-attribute,
+.code-block .hljs-variable,
+.code-block .hljs-template-variable,
+.code-block .hljs-selector-attr,
+.code-block .hljs-selector-pseudo,
+.code-block .hljs-selector-id,
+.code-block .hljs-link,
+.code-block .hljs-params,
+.code-block .hljs-property {
+  color: var(--dracula-cyan);
+}
+.code-block .hljs-type,
+.code-block .hljs-built_in,
+.code-block .hljs-class .hljs-title,
+.code-block .hljs-title.class_,
+.code-block .hljs-selector-class,
+.code-block .hljs-meta {
+  color: var(--dracula-purple);
+}
+.code-block .hljs-title,
+.code-block .hljs-title.function_,
+.code-block .hljs-name {
+  color: var(--dracula-green);
+}
+.code-block .hljs-deletion {
+  color: var(--dracula-red);
+}
+.code-block .hljs-subst,
+.code-block .hljs-bullet,
+.code-block .hljs-template-tag {
+  color: var(--dracula-fg);
+}
+.code-block .hljs-strong {
+  font-weight: 700;
+}
+.code-block .hljs-emphasis {
+  font-style: italic;
+}

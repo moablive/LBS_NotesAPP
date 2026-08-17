@@ -2,66 +2,43 @@ import { Telegraf, session, Scenes } from 'telegraf';
 import { env } from './config.js';
 import type { BotContext } from './context.js';
 import { auth } from './auth.js';
-import { handleAddTask, handleListTasks, handleRemoveTask } from './handlers/tasks.js';
-import { handleVoiceMessage } from './handlers/voice.js';
-import { startNotificationsCron } from './cron/notifications.js';
-import { addTaskWizard } from './scenes/addTaskWizard.js';
-import { removeTaskWizard } from './scenes/removeTaskWizard.js';
-import { completeTaskWizard } from './scenes/completeTaskWizard.js';
-import { addGroupWizard } from './scenes/addGroupWizard.js';
+import { handleListNotes, handleListWorkspaces } from './handlers/notes.js';
 import { loginWizard } from './scenes/loginWizard.js';
 import { menuKeyboard } from './ui/menu.js';
-import { botApi } from '@todo/api-client';
 
 // Inicializar Bot
 const bot = new Telegraf<BotContext>(env.TELEGRAM_BOT_TOKEN);
 
 // Sessão e Stages precisam vir ANTES do auth: usuários não vinculados são
 // jogados no LOGIN_WIZARD, e isso exige ctx.scene disponível.
-const stage = new Scenes.Stage<BotContext>([
-  addTaskWizard,
-  removeTaskWizard,
-  completeTaskWizard,
-  addGroupWizard,
-  loginWizard
-]);
+const stage = new Scenes.Stage<BotContext>([loginWizard]);
 bot.use(session());
 bot.use(stage.middleware());
 
 // Middleware de autenticação (LoginHub via bot — padrão MoneyAPP)
 bot.use(auth);
 
-// Iniciar cron jobs
-startNotificationsCron(bot);
-
 // Menu principal / Start
+// Nome vem do próprio Telegram: `reminder_settings` (onde ficaria o
+// display_name do site) não existe no banco notesapp.
 bot.start(async (ctx) => {
-  let name = 'Patrão';
-  try {
-    const settings = await botApi.getReminderSettings(String(ctx.from.id));
-    if (settings.displayName?.trim()) name = settings.displayName.trim();
-  } catch { /* usa fallback */ }
+  const name = ctx.from.first_name?.trim() || 'Patrão';
   await ctx.reply(
-    `👋 Fala, ${name}! Aqui é o seu Assistente Pessoal.\n\nO que o chefe deseja fazer agora?`,
+    `👋 Fala, ${name}! Aqui é o seu NotesAPP.\n\n` +
+      'Por enquanto eu consulto o que já existe: suas notas e seus workspaces.',
     menuKeyboard
   );
 });
 
-// Mensagem de voz
-bot.on('voice', handleVoiceMessage);
-
 // Ações dos Botões
-bot.hears('✅ Concluir Tarefa', (ctx) => ctx.scene.enter('COMPLETE_TASK_WIZARD'));
-bot.hears('📋 Listar Tarefas', handleListTasks);
-bot.hears('📂 Minhas Listas', handleListTasks);
-bot.hears('📁 Nova Lista', (ctx) => ctx.scene.enter('ADD_GROUP_WIZARD'));
-bot.hears('📝 Adicionar Tarefa', (ctx) => ctx.scene.enter('ADD_TASK_WIZARD'));
-bot.hears('❌ Remover Tarefa', (ctx) => ctx.scene.enter('REMOVE_TASK_WIZARD'));
+bot.hears('📝 Minhas Notas', handleListNotes);
+bot.hears('🗂️ Meus Workspaces', handleListWorkspaces);
 
 // Comandos
-bot.command('add', handleAddTask);
-bot.command('list', handleListTasks);
-bot.command('remove', handleRemoveTask);
+bot.command('notas', handleListNotes);
+bot.command('list', handleListNotes);
+bot.command('workspaces', handleListWorkspaces);
+bot.command('menu', (ctx) => ctx.reply('O que deseja consultar?', menuKeyboard));
 
 bot.catch((err, ctx) => {
   console.error(`[bot] erro ao processar update ${ctx.updateType}:`, err);
@@ -71,7 +48,7 @@ bot.launch({ dropPendingUpdates: true }).catch((err: unknown) => {
   console.error('[bot] polling encerrado por erro:', err);
   process.exit(1);
 });
-console.log('🤖 TODO Bot rodando...');
+console.log('🤖 Notes Bot rodando...');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

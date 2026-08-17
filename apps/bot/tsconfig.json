@@ -19,8 +19,8 @@
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@todo/api-client": ["src/vendor/api-client/index.ts"],
-      "@todo/models": ["src/vendor/models/index.ts"]
+      "@notes/api-client": ["src/vendor/api-client/index.ts"],
+      "@notes/models": ["src/vendor/models/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

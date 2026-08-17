@@ -59,6 +59,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
     
+    // 3) Tenant verification (Multi-tenant check)
+    if (env.LOGINHUB_APP_ID && Number(payload.app_id) !== env.LOGINHUB_APP_ID) {
+      res.status(403).json({ error: 'forbidden - invalid tenant' });
+      return;
+    }
+    
     req.user = { loginhubId: parseInt(payload.sub, 10), email: payload.email };
     next();
   } catch (err) {
