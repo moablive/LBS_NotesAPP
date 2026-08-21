@@ -1,5 +1,11 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
+import { PluginKey } from '@tiptap/pm/state';
+
+// Chave própria para esta Suggestion não colidir com a do slashExtension na
+// chave padrão `suggestion$` (senão o ProseMirror derruba o editor com
+// "Adding different instances of a keyed plugin").
+export const noteLinkSuggestionPluginKey = new PluginKey('noteLinkSuggestion');
 
 export default Node.create({
   name: 'noteLink',
@@ -37,6 +43,7 @@ export default Node.create({
       Suggestion({
         editor: this.editor,
         ...this.options.suggestion,
+        pluginKey: noteLinkSuggestionPluginKey,
       }),
     ];
   },
