@@ -119,7 +119,7 @@ export const loginWizard = new Scenes.WizardScene<BotContext>(
             'mostra o QR para escanear no seu app autenticador (Google Authenticator, Authy, ' +
             '1Password...). <b>Guarde os códigos de recuperação</b> — eles aparecem uma vez só.\n\n' +
             `${hub.linkEnrolamento()}\n\n` +
-            'Terminou? Volte aqui e envie /relogin.',
+            'Terminou? Volte ao app e use Configurações → Vincular Telegram.',
           { parse_mode: 'HTML' }
         );
         return ctx.scene.leave();
