@@ -27,6 +27,31 @@ async function ownerKeys(telegramId: string): Promise<string[]> {
 }
 
 export const botApi = {
+  /**
+   * Troca o passe do deep link pelo vinculo `telegram_id -> loginhub_id`.
+   *
+   * Unica chamada HTTP deste cliente — o resto fala direto com o Postgres. E de
+   * proposito: a regra do passe (hash guardado em vez do passe, validade, uso
+   * unico com a corrida resolvida no proprio UPDATE) mora no backend, dono do
+   * schema. Reimplementar aqui daria duas copias de uma verificacao de
+   * seguranca, livres para divergir.
+   */
+  consumirPasseDeVinculo: async (token: string, telegramId: string): Promise<{ loginhubId: number }> => {
+    const res = await fetch(`${process.env.BACKEND_API_URL ?? 'http://notesapp_backend:3000/api'}/bot/consume-link-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.BOT_SERVICE_KEY ?? '',
+      },
+      body: JSON.stringify({ token, telegramId }),
+    });
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => ({}));
+      throw new Error((corpo as { message?: string }).message ?? `HTTP ${res.status}`);
+    }
+    return (await res.json()) as { loginhubId: number };
+  },
+
   /** Usuário já vinculou o Telegram? (login via bot, padrão MoneyAPP) */
   getUserByTelegramId: async (telegramId: string): Promise<{ loginhubId: number } | null> => {
     const result = await pool.query(

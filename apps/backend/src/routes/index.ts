@@ -5,7 +5,8 @@ import { foldersRouter } from './folders.js';
 import { userRouter } from './user.js';
 import { pushRouter } from './push.js';
 import { remindersRouter } from './reminders.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireBotKey } from '../middleware/auth.js';
+import { telegramRouter, telegramBotRouter } from './telegram.js';
 import { db } from '@notesapp/db';
 import { schema } from '@notesapp/db';
 import { eq } from 'drizzle-orm';
@@ -21,6 +22,12 @@ export const apiRouter = Router();
 // /bot e /prefs foram removidos: consultavam `schema.tasks` e `schema.userPrefs`,
 // tabelas do TodoAPP que não existem no NotesAPP (o bot fala direto no Postgres,
 // e o app não tem kanban/calendário para configurar).
+// Unica rota de servico do app: o bot troca o passe do deep link pelo vinculo.
+// O `/bot` anterior foi removido por consultar tabelas do TodoAPP; esta entra
+// com proposito proprio e pela guarda da chave de servico, ANTES do requireAuth
+// (quem chama e o bot, nao uma pessoa com sessao).
+apiRouter.use('/bot', requireBotKey, telegramBotRouter);
+
 apiRouter.use(requireAuth);
 apiRouter.use(async (req, _res, next) => {
   // auto-create user_settings if not exists
@@ -36,6 +43,7 @@ apiRouter.use(async (req, _res, next) => {
 });
 
 apiRouter.use('/user', userRouter);
+apiRouter.use('/telegram', telegramRouter);
 apiRouter.use('/workspaces', workspacesRouter);
 apiRouter.use('/notes', notesRouter);
 apiRouter.use('/folders', foldersRouter);
