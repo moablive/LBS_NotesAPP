@@ -10,6 +10,10 @@ const envSchema = z.object({
   LOGINHUB_API_URL: z.string().default('http://server_loginhub_backend:3000/api'),
   // App id do NotesAPP no LoginHub (NÃO usar o do TodoAPP=4, senão o login é
   // validado no tenant errado). Sobrescrito pelo .env em produção.
+  // Login publico DESTE app — e para ca que o bot manda quem precisa
+  // enrolar 2FA. O QR mora na propria tela do app desde que cada um
+  // passou a enrolar em casa; o painel do hub saiu do caminho.
+  APP_LOGIN_URL: z.string().default('https://notes.astralwavelabel.com/login'),
   LOGINHUB_APP_ID: z.coerce.number().default(11),
 });
 
