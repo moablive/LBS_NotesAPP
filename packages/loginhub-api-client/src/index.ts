@@ -1,3 +1,16 @@
+/**
+ * ⚠️ DEPRECADO — nao use em codigo novo.
+ *
+ * Este pacote e uma fork congelada do cliente do LoginHUB, de antes do 2FA.
+ * Ele grava `data.token` as cegas (nos desfechos de 2FA isso e undefined, e o
+ * storage acaba com a string "undefined") e ainda chama `/auth/change-password`,
+ * rota que nao existe mais no hub.
+ *
+ * O substituto e `apps/frontend/src/lib/hubAuthClient.ts` — fonte sincronizada
+ * a partir de LoginHUB/packages/auth-kit, identica em todos os apps. Nenhum
+ * arquivo do frontend importa mais este pacote; ele so continua aqui porque
+ * remove-lo exige mexer no lockfile.
+ */
 import axios, { type InternalAxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
 import type {
   User,
