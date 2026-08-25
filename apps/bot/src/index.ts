@@ -3,16 +3,15 @@ import { env } from './config.js';
 import type { BotContext } from './context.js';
 import { auth, markLinked } from './auth.js';
 import { handleListNotes, handleListWorkspaces } from './handlers/notes.js';
-import { loginWizard } from './scenes/loginWizard.js';
 import { menuKeyboard } from './ui/menu.js';
 import { botApi } from '@notes/api-client';
 
 // Inicializar Bot
 const bot = new Telegraf<BotContext>(env.TELEGRAM_BOT_TOKEN);
 
-// Sessão e Stages precisam vir ANTES do auth: usuários não vinculados são
-// jogados no LOGIN_WIZARD, e isso exige ctx.scene disponível.
-const stage = new Scenes.Stage<BotContext>([loginWizard]);
+// Sessão e Stages antes do auth: as wizard scenes precisam de ctx.scene, e o
+// handler do vínculo híbrido roda antes de qualquer guarda.
+const stage = new Scenes.Stage<BotContext>([]);
 bot.use(session());
 bot.use(stage.middleware());
 

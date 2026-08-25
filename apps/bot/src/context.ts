@@ -1,7 +1,7 @@
 import { Context, Scenes } from 'telegraf';
 
 export interface MyWizardSession extends Scenes.WizardSessionData {
-  /** E-mail digitado no LOGIN_WIZARD, guardado entre os passos. */
+  /** Resto do wizard de senha, removido. Mantido para nao quebrar sessoes vivas. */
   loginEmail?: string;
 }
 
