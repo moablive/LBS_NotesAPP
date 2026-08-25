@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
-    "@loginhub/api-client": "workspace:^",
-    "@loginhub/schema": "file:/mnt/docker-services/server/dashboard/packages/schema/loginhub-schema-1.0.0.tgz",
     "@notesapp/api-client": "workspace:*",
     "@notesapp/models": "workspace:*",
     "@tiptap/core": "^2.2.4",
