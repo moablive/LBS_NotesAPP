@@ -1,10 +1,21 @@
 import type { NextFunction, Request, Response } from 'express';
 import { env } from '@notesapp/services';
 import { LoginHubPayload } from '@notesapp/models';
-import { verifyHubToken, HubAuthError, bearerDoRequest } from '../lib/hubAuthServer.js';
+import { verifyHubToken, HubAuthError, bearerDoRequest, criarVerificadorDeRevogacao } from '../lib/hubAuthServer.js';
 
 /** Config da guarda do hub. Uma so, montada a partir do env validado. */
 const hubConfig = { secret: env.JWT_SECRET, appId: env.LOGINHUB_APP_ID };
+
+/**
+ * Revogacao de sessao. Ativar o 2FA (ou um reset administrativo) carimba um
+ * piso no hub a partir do qual so valem tokens novos — e o `verifyHubToken`,
+ * que e local de proposito, nao enxerga isso. Sem este verificador um token
+ * emitido antes do corte seguia aceito aqui por ate 24 h.
+ *
+ * Cache curto por usuario: o piso muda raríssimo, entao nao ha ida a rede por
+ * requisicao. Falha ABERTA se o hub nao responder — ver o kit.
+ */
+const revogacao = criarVerificadorDeRevogacao({ baseUrl: env.LOGINHUB_API_URL });
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -84,6 +95,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     if (!payload.sub || !payload.email) {
       res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    // `sub` ja foi conferido acima; o tipo local do NotesAPP o declara opcional,
+    // dai o estreitamento explicito em vez de um cast cego.
+    if (await revogacao.revogada(token, { ...payload, sub: payload.sub })) {
+      res.status(401).json({
+        error: 'SESSAO_REVOGADA',
+        message: 'Sua sessao foi encerrada. Entre novamente.',
+      });
       return;
     }
     

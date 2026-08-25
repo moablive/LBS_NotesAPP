@@ -30,6 +30,11 @@ const envSchema = z.object({
   // desligava silenciosamente a checagem de tenant e passava a aceitar JWT de
   // qualquer outro app do hub.
   LOGINHUB_APP_ID: z.coerce.number().int().positive(),
+  /**
+   * API interna do hub — usada pela introspeccao de revogacao de sessao
+   * (`GET /auth/session-floor`). DNS do Docker, sem sair para o Cloudflare.
+   */
+  LOGINHUB_API_URL: z.string().default('http://server_loginhub_backend:3000/api'),
 });
 
 const parsed = envSchema.safeParse(process.env);
