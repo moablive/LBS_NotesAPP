@@ -5,11 +5,17 @@
        o componente que o desenhava nunca foi escrito — entao ninguem o usava e
        um `confirm()` ficaria pendurado para sempre. -->
   <ConfirmDialog />
+
+  <!-- Fora do router-view de proposito: sobrevivem a troca de rota. -->
+  <VersionBadge />
+  <UpdateBanner />
 </template>
 
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import UpdateBanner from '@/components/UpdateBanner.vue';
+import VersionBadge from '@/components/VersionBadge.vue';
 
 // Initialize auth state
 useAuthStore();
