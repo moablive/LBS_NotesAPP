@@ -82,6 +82,30 @@ pnpm db:migrate
 pnpm dev
 ```
 
+## 🗃️ Migrations — regras que o histórico ensinou
+
+O diretório `packages/db/drizzle/` começa em `0000_baseline.sql` (27/08/2026),
+gerado do schema e **validado contra a produção**: 63 colunas, 21 índices e 21
+constraints idênticos. As 27 migrations anteriores estão em
+`packages/db/drizzle_arquivo/`, com o `LEIA-ME.md` explicando por que saíram.
+
+Resumo: a cadeia antiga **não reconstruía o banco**. Num banco vazio ela falhava
+com `relation "user_settings" does not exist` — a tabela existia em produção sem
+nunca ter sido criada por migration. O mesmo defeito estava nos três apps da
+suite que usam Drizzle.
+
+**As três regras:**
+
+1. **Migration aplicada não se edita.** Precisa mudar? `pnpm db:generate` cria a
+   próxima.
+2. **Limpeza de dados pontual não é migration.** Vai para script avulso, fora de
+   `drizzle/`.
+3. **Schema não se altera à mão no psql.** Foi assim que `user_settings` e o
+   índice `telegram_link_tokens_expira_idx` passaram a existir sem o repositório
+   saber — e é o que quebrou a cadeia.
+
+---
+
 ## 🔥 Hot reload (modo dev)
 
 Em produção o front é build estático servido por nginx e o backend roda o
