@@ -56,6 +56,18 @@ const envSchema = z.object({
    * (`GET /auth/session-floor`). DNS do Docker, sem sair para o Cloudflare.
    */
   LOGINHUB_API_URL: z.string().default('http://server_loginhub_backend:3000/api'),
+  // ── LBS Notify (plataforma central de notificacoes) ──────────────────────
+  // Com a flag `false` nada muda: as rotas /api/push/* e a tabela
+  // push_subscriptions continuam sendo o caminho. Ligada, o backend passa a
+  // emitir `notes.reminder` para o Notify entregar.
+  LBS_NOTIFY_URL: z.string().default('http://lbs_notify_api:3000'),
+  LBS_NOTIFY_KEY: z.string().optional(),
+  NOTES_NOTIFY_USE_CENTRAL: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? false : /^(1|true|yes|on)$/i.test(v.trim()))),
+  /** Intervalo do varredor de lembretes, em minutos. 0 desliga. */
+  NOTES_REMINDER_SCAN_MINUTES: z.coerce.number().int().min(0).default(1),
 });
 
 const parsed = envSchema.safeParse(process.env);

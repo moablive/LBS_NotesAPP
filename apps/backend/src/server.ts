@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { env } from '@notesapp/services';
+import { iniciarVarredorDeLembretes } from './notify/reminders.js';
 
 async function main() {
   // Last-resort safety net: a stray promise rejection outside the request
@@ -16,8 +17,13 @@ async function main() {
     console.log(`TodoAPP backend listening on :${env.PORT} (${env.NODE_ENV})`);
   });
 
+  // Lembretes de nota (`remind_at`) -> LBS Notify. Inerte enquanto
+  // NOTES_NOTIFY_USE_CENTRAL for `false`.
+  const pararVarredor = iniciarVarredorDeLembretes();
+
   for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     process.on(sig, () => {
+      pararVarredor();
       server.close(() => process.exit(0));
     });
   }
