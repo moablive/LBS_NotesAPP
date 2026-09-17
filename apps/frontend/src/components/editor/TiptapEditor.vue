@@ -10,6 +10,8 @@ import { useEditor, EditorContent, VueRenderer, VueNodeViewRenderer } from '@tip
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import SlashCommands from './slashExtension';
 import { SubPageLink } from './subPageNode';
 import { ToggleContent, ToggleList, ToggleSummary } from './toggleNode';
@@ -201,6 +203,9 @@ const editor = useEditor({
         };
       },
     }).configure({ lowlight, defaultLanguage: DEFAULT_CODE_LANGUAGE }),
+    TaskList,
+    // nested: sub-tarefa com Tab, como no Notion.
+    TaskItem.configure({ nested: true }),
     ToggleList,
     ToggleSummary,
     ToggleContent,
@@ -245,6 +250,38 @@ const editor = useEditor({
               icon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>',
               command: ({ editor, range }: any) => {
                 editor.chain().focus().deleteRange(range).toggleBulletList().run();
+              },
+            },
+            {
+              title: 'To-do list',
+              description: 'Lista de tarefas com caixa de marcar.',
+              icon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+              command: ({ editor, range }: any) => {
+                editor.chain().focus().deleteRange(range).toggleTaskList().run();
+              },
+            },
+            {
+              title: 'Numbered list',
+              description: 'Lista numerada.',
+              icon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>',
+              command: ({ editor, range }: any) => {
+                editor.chain().focus().deleteRange(range).toggleOrderedList().run();
+              },
+            },
+            {
+              title: 'Quote',
+              description: 'Citação recuada.',
+              icon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h3"/><path d="M14 21c3 0 7-1 7-8V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h3"/></svg>',
+              command: ({ editor, range }: any) => {
+                editor.chain().focus().deleteRange(range).toggleBlockquote().run();
+              },
+            },
+            {
+              title: 'Divider',
+              description: 'Linha horizontal para separar seções.',
+              icon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+              command: ({ editor, range }: any) => {
+                editor.chain().focus().deleteRange(range).setHorizontalRule().run();
               },
             },
             {
@@ -329,6 +366,41 @@ onBeforeUnmount(() => {
      para fora da viewport, e a página filha parecia não existir. */
   min-height: 180px;
 }
+/* ══ Lista de tarefas (TaskList/TaskItem) ═══════════════════════════════════
+   Sem isto o `ul[data-type="taskList"]` herda o marcador de bala do `prose` do
+   Tailwind e cada item sai com uma bolinha ANTES da caixa de marcar. */
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+/* O <label> carrega o checkbox; sem `contain` o clique de marcar às vezes cai
+   no parágrafo ao lado e só move o cursor. */
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+  user-select: none;
+}
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] input[type='checkbox'] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+}
+/* Tarefa concluída fica apagada, para a lista mostrar o que falta. */
+.tiptap-editor-wrapper .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
 /* Bloco de sub-página (nó subPageLink, renderizado por SubPageBlock.vue) */
 .tiptap-editor-wrapper .ProseMirror .sub-page-block.ProseMirror-selectednode {
   outline: 2px solid var(--accent);

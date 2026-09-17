@@ -8,6 +8,19 @@ import {
 } from '@/components/editor/subPageHtml';
 
 const ACTIVE_WORKSPACE_KEY = 'notes_active_workspace';
+const RECENTS_KEY = 'notes_recents';
+/** Quantas notas a seção Recents da sidebar guarda. */
+const RECENTS_MAX = 8;
+
+function lerRecentes(): string[] {
+  try {
+    const cru = JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]');
+    return Array.isArray(cru) ? cru.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    // localStorage corrompido não pode impedir o app de abrir.
+    return [];
+  }
+}
 
 export const useNotesStore = defineStore('notes', {
   state: () => ({
@@ -26,6 +39,10 @@ export const useNotesStore = defineStore('notes', {
     expandedIds: {} as Record<string, boolean>,
     // Nota sendo arrastada (drag-and-drop na árvore).
     draggingId: null as string | null,
+    // Últimas notas abertas, da mais recente para a mais antiga. Guarda só o
+    // id: o título e o ícone saem de `notes`, então renomear a nota não deixa
+    // um nome velho no histórico.
+    recentIds: lerRecentes() as string[],
     // Graph links and backlinks state
     graphEdges: [] as { sourceNoteId: string, targetNoteId: string }[],
     backlinks: [] as NoteDto[],
@@ -322,9 +339,23 @@ export const useNotesStore = defineStore('notes', {
     setActiveNote(noteId: string | null) {
       this.activeNoteId = noteId;
       if (noteId) {
+        this.registrarRecente(noteId);
         this.fetchBacklinks(noteId);
       } else {
         this.backlinks = [];
+      }
+    },
+    /**
+     * Põe a nota no topo do histórico. Passa por aqui toda abertura, porque
+     * `setActiveNote` é o único caminho para abrir nota — árvore, favoritos,
+     * busca, breadcrumb e Cmd+K chamam todos ele.
+     */
+    registrarRecente(noteId: string) {
+      this.recentIds = [noteId, ...this.recentIds.filter(id => id !== noteId)].slice(0, RECENTS_MAX);
+      try {
+        localStorage.setItem(RECENTS_KEY, JSON.stringify(this.recentIds));
+      } catch {
+        // Cota estourada ou modo privado: o histórico vira só da sessão.
       }
     },
     async reorderFolders(newFolders: FolderDto[]) {
@@ -360,6 +391,14 @@ export const useNotesStore = defineStore('notes', {
       return state.notes
         .filter(n => (n as any).isFavorite)
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    },
+    // Últimas notas abertas, na ordem do histórico. Ids que não resolvem são
+    // descartados em silêncio: nota apagada, na lixeira ou de outro workspace
+    // não aparece, e o histórico não precisa ser limpo quando isso acontece.
+    recents(state): NoteDto[] {
+      return state.recentIds
+        .map(id => state.notes.find(n => n.id === id))
+        .filter((n): n is NoteDto => !!n);
     },
     // Busca plana (usada na sidebar quando há termo de pesquisa).
     searchMatches(state): NoteDto[] {

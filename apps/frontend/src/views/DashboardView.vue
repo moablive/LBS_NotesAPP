@@ -93,6 +93,29 @@
           </div>
         </div>
 
+        <!-- Recents: as últimas abertas, para voltar sem caçar na árvore.
+             Escondida enquanto há busca em curso, porque aí a lista de baixo
+             já é um resultado plano e duas listas competiriam pela atenção. -->
+        <div v-if="!isSidebarMinimized && !notesStore.searchQuery.trim() && notesStore.recents.length" class="mb-4">
+          <h3 class="text-[11px] font-bold text-[var(--muted)] mb-2 px-2 uppercase tracking-wide">Recents</h3>
+          <div class="space-y-[2px]">
+            <div
+              v-for="note in notesStore.recents"
+              :key="'rec-' + note.id"
+              @click="notesStore.setActiveNote(note.id)"
+              class="flex items-center gap-2 py-1.5 rounded-lg cursor-pointer px-3 transition-colors"
+              :class="notesStore.activeNoteId === note.id && viewMode === 'notes' ? 'bg-[var(--bg-hover)] text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text)]'"
+            >
+              <span class="w-4 h-4 shrink-0 inline-flex items-center justify-center">
+                <img v-if="note.icon && (note.icon.startsWith('http') || note.icon.startsWith('data:'))" :src="note.icon" class="w-4 h-4 rounded-sm object-cover" />
+                <span v-else-if="note.icon" class="text-[13px]">{{ note.icon }}</span>
+                <DocumentTextIcon v-else class="w-[14px] h-[14px] text-[var(--muted)]" />
+              </span>
+              <span class="text-[13px] font-medium truncate flex-1">{{ note.title || 'Sem título' }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Páginas do workspace ativo -->
         <div v-if="!isSidebarMinimized">
           <h3 class="text-[11px] font-bold text-[var(--muted)] mb-2 px-2 uppercase tracking-wide">Páginas</h3>
@@ -289,6 +312,13 @@
               </div>
 
               <div class="flex items-center gap-2 ml-auto">
+                 <!-- O updatedAt já existia no banco e nunca aparecia na tela. -->
+                 <span
+                   class="hidden lg:inline text-[12px] text-[var(--muted)] whitespace-nowrap"
+                   :title="dataCompleta(notesStore.activeNote.updatedAt)"
+                 >
+                   {{ formatarEditado(notesStore.activeNote.updatedAt) }}
+                 </span>
                  <button
                    class="text-[var(--muted)] hover:text-[var(--text)] p-1.5 transition-colors"
                    :class="notesStore.isGraphVisible ? 'text-[var(--accent)]' : ''"
@@ -591,6 +621,10 @@
 
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
 
+    <!-- Cmd+K. Fica fora do v-if de propósito: o componente anima a entrada e
+         a saída, então quem controla a visibilidade é a prop `aberto`. -->
+    <QuickSwitcher :aberto="quickSwitcherAberto" @fechar="quickSwitcherAberto = false" />
+
   </div>
 </template>
 
@@ -623,6 +657,7 @@ import NoteTreeItem from '@/components/NoteTreeItem.vue';
 import IconPicker from '@/components/IconPicker.vue';
 import SettingsModal from '@/components/SettingsModal.vue';
 import GraphView from '@/components/GraphView.vue';
+import QuickSwitcher from '@/components/QuickSwitcher.vue';
 import '@/composables/useTheme';
 
 const notesStore = useNotesStore();
@@ -809,6 +844,38 @@ const linkChildPage = async (childId: string) => {
   const child = notesStore.notes.find(n => n.id === childId);
   if (!parentId || !child) return;
   await notesStore.linkSubPage(parentId, childId, child.title);
+};
+
+/**
+ * Data e hora por extenso, para o `title` do "Editado …".
+ *
+ * `NoteDto` vem do Drizzle, então o tipo de `updatedAt` é `Date` — mas o que
+ * chega pela API é a string ISO do JSON. As duas formas são aceitas aqui para
+ * que o tipo e a realidade não se contradigam.
+ */
+const dataCompleta = (valor: Date | string) => {
+  const quando = valor instanceof Date ? valor : new Date(valor);
+  return Number.isNaN(quando.getTime()) ? '' : quando.toLocaleString('pt-BR');
+};
+
+/**
+ * "Editado agora", "Editado há 5 min", "Editado ontem", "Editado em 03/09".
+ * Relativo enquanto é recente, porque é quando a informação serve; passada uma
+ * semana, a data absoluta diz mais que "há 9 dias". O horário exato fica no
+ * `title` do elemento, para quem precisar.
+ */
+const formatarEditado = (valor: Date | string) => {
+  const quando = valor instanceof Date ? valor : new Date(valor);
+  if (Number.isNaN(quando.getTime())) return '';
+  const minutos = Math.floor((Date.now() - quando.getTime()) / 60000);
+  if (minutos < 1) return 'Editado agora';
+  if (minutos < 60) return `Editado há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `Editado há ${horas} h`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return 'Editado ontem';
+  if (dias < 7) return `Editado há ${dias} dias`;
+  return `Editado em ${quando.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
 };
 
 const getBreadcrumbs = () => {
@@ -1074,8 +1141,21 @@ watch(() => notesStore.activeNoteId, (id) => {
   isHoveringCover.value = false;
 });
 
+/** Seletor rápido de página (Cmd+K). */
+const quickSwitcherAberto = ref(false);
+
 const onKeyDown = (e: KeyboardEvent) => {
+  // Cmd+K (Mac) / Ctrl+K: seletor rápido de página. Alterna, para a mesma
+  // tecla fechar o que abriu. O preventDefault é obrigatório: no Chrome,
+  // Ctrl+K leva o foco para a barra de endereços do navegador.
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    quickSwitcherAberto.value = !quickSwitcherAberto.value;
+    return;
+  }
   if (e.key === 'Escape') {
+    // Antes dos demais: é o diálogo mais acima na pilha quando está aberto.
+    if (quickSwitcherAberto.value) { quickSwitcherAberto.value = false; return; }
     if (workspaceMenuOpen.value) workspaceMenuOpen.value = false;
     else if (showCreateModal.value) showCreateModal.value = false;
     else if (picker.value) picker.value = null;
