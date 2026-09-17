@@ -41,7 +41,17 @@ export const SubPageLink = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: 'a[data-note-id]' }];
+    // `a.sub-page-link`, e NÃO `a[data-note-id]`: o noteLink (o link inline de
+    // `[[nota]]`) também serializa com `data-note-id`, então a regra genérica
+    // casava nos dois nós. Com prioridades iguais, quem vencia era o noteLink
+    // — registrado antes no TiptapEditor —, e todo bloco de sub-página voltava
+    // do banco como link inline, perdendo o título (noteLink é atom) e
+    // quebrando o `getHTML()` seguinte. Resultado prático: a página dentro da
+    // página sumia sozinha depois de reabrir.
+    //
+    // A classe já era emitida pelo `subPageBlockHtml` e pelo `renderHTML` daqui
+    // desde sempre, então conteúdo antigo continua sendo reconhecido.
+    return [{ tag: 'a.sub-page-link', priority: 60 }];
   },
 
   renderHTML({ HTMLAttributes, node }) {

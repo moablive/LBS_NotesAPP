@@ -176,9 +176,11 @@ const editor = useEditor({
             .deleteRange(range)
             .insertContent([
               {
+                // Título vai em `attrs`, não em `content`: noteLink é atômico e
+                // o ProseMirror descarta filhos de nó atômico — era por isso que
+                // o link de `[[nota]]` saía sem texto.
                 type: 'noteLink',
-                attrs: { 'data-note-id': props.id },
-                content: [{ type: 'text', text: props.title || 'Sem título' }],
+                attrs: { 'data-note-id': props.id, title: props.title || 'Sem título' },
               },
               { type: 'text', text: ' ' },
             ])
