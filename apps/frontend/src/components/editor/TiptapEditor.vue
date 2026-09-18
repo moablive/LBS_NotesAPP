@@ -39,28 +39,50 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'blur', 'create-note']);
 
-let popup: any;
-let component: any;
+/**
+ * Fábrica dos menus flutuantes do editor (o "/" e o "[[nota]]").
+ *
+ * Os dois eram cópias literais uma da outra e carregavam o MESMO defeito: o
+ * `tippy` só era criado quando `props.clientRect` existia, mas `onUpdate`,
+ * `onKeyDown` e `onExit` usavam `popup[0]` sem conferir. No celular o
+ * `clientRect` vem nulo (o teclado virtual recompõe a viewport no instante em
+ * que a sugestão abre), então `popup` ficava `undefined` e o primeiro
+ * `popup[0]` lançava TypeError de dentro de um plugin do ProseMirror — que é o
+ * que travava o aplicativo ao digitar "/".
+ *
+ * Unificado num lugar só porque corrigir uma cópia e esquecer a outra foi
+ * exatamente o risco aqui.
+ */
+const criarMenuFlutuante = (Componente: any) => {
+  let instancia: any = null;
+  let renderer: any = null;
 
-const renderCommandList = () => {
-  return {
+  const destruir = () => {
+    instancia?.destroy?.();
+    instancia = null;
+    renderer?.destroy?.();
+    renderer = null;
+  };
+
+  return () => ({
     onStart: (props: any) => {
-      component = new VueRenderer(CommandList, {
-        props: {
-          items: props.items,
-          command: props.command,
-        },
+      // Sobra de uma sugestão anterior que não fechou direito.
+      destruir();
+
+      renderer = new VueRenderer(Componente, {
+        props: { items: props.items, command: props.command },
         editor: props.editor,
       });
 
-      if (!props.clientRect) {
-        return;
-      }
+      const rect = props.clientRect?.();
+      if (!rect) return; // sem âncora não há o que posicionar; nada de popup órfão
 
-      popup = tippy('body', {
-        getReferenceClientRect: props.clientRect,
+      // Sem `[0]`: com um Element (e não um seletor como o antigo `'body'`) o
+      // tippy devolve UMA instância, não um array.
+      instancia = tippy(document.body, {
+        getReferenceClientRect: () => props.clientRect?.() ?? rect,
         appendTo: () => document.body,
-        content: component.element,
+        content: renderer.element,
         showOnCreate: true,
         interactive: true,
         trigger: 'manual',
@@ -69,91 +91,27 @@ const renderCommandList = () => {
     },
 
     onUpdate(props: any) {
-      component.updateProps({
-        items: props.items,
-        command: props.command,
-      });
-
-      if (!props.clientRect) {
-        return;
-      }
-
-      popup[0].setProps({
-        getReferenceClientRect: props.clientRect,
-      });
+      renderer?.updateProps({ items: props.items, command: props.command });
+      if (!props.clientRect) return;
+      instancia?.setProps({ getReferenceClientRect: props.clientRect });
     },
 
     onKeyDown(props: any) {
       if (props.event.key === 'Escape') {
-        popup[0].hide();
+        instancia?.hide();
         return true;
       }
-
-      return component.ref?.onKeyDown(props.event);
+      return renderer?.ref?.onKeyDown(props.event) ?? false;
     },
 
     onExit() {
-      popup[0].destroy();
-      component.destroy();
+      destruir();
     },
-  };
+  });
 };
 
-let linkPopup: any;
-let linkComponent: any;
-
-const renderLinkList = () => {
-  return {
-    onStart: (props: any) => {
-      linkComponent = new VueRenderer(NoteLinkList, {
-        props: {
-          items: props.items,
-          command: props.command,
-        },
-        editor: props.editor,
-      });
-
-      if (!props.clientRect) {
-        return;
-      }
-
-      linkPopup = tippy('body', {
-        getReferenceClientRect: props.clientRect,
-        appendTo: () => document.body,
-        content: linkComponent.element,
-        showOnCreate: true,
-        interactive: true,
-        trigger: 'manual',
-        placement: 'bottom-start',
-      });
-    },
-    onUpdate(props: any) {
-      linkComponent.updateProps({
-        items: props.items,
-        command: props.command,
-      });
-
-      if (!props.clientRect) {
-        return;
-      }
-
-      linkPopup[0].setProps({
-        getReferenceClientRect: props.clientRect,
-      });
-    },
-    onKeyDown(props: any) {
-      if (props.event.key === 'Escape') {
-        linkPopup[0].hide();
-        return true;
-      }
-      return linkComponent.ref?.onKeyDown(props.event);
-    },
-    onExit() {
-      linkPopup[0].destroy();
-      linkComponent.destroy();
-    },
-  };
-};
+const renderCommandList = criarMenuFlutuante(CommandList);
+const renderLinkList = criarMenuFlutuante(NoteLinkList);
 
 const editor = useEditor({
   content: props.modelValue,
@@ -468,6 +426,30 @@ onBeforeUnmount(() => {
 }
 .block-handle__btn--drag:active {
   cursor: grabbing;
+}
+
+/* ══ Toque ══════════════════════════════════════════════════════════════════
+   No celular a alca e fixada tocando na linha (ver blockHandle.ts) e fica
+   parada ali, entao precisa de alvo de dedo e de fundo proprio: sem hover para
+   revelar, e sem calha a esquerda, ela pousa sobre a margem do texto. */
+@media (pointer: coarse) {
+  .block-handle {
+    gap: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 3px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+  }
+  .block-handle__btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    color: var(--text);
+  }
+  .block-handle__btn svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
 }
 
 /* Linha que mostra onde o bloco vai cair. É nossa, não o dropcursor do

@@ -9,6 +9,7 @@
         :key="index"
         class="w-full text-left px-3 py-2 rounded-md hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-3"
         :class="{ 'bg-[var(--bg-hover)] text-white': index === selectedIndex, 'text-[var(--text)]': index !== selectedIndex }"
+        @pointerdown.prevent
         @click="selectItem(index)"
       >
         <div class="w-8 h-8 rounded border border-[var(--border-soft)] bg-[var(--bg)] flex items-center justify-center shrink-0">

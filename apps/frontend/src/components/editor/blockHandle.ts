@@ -65,6 +65,8 @@ const GRIP_ICON = icon(
 
 class BlockHandleView {
   private target: Target | null = null;
+  /** A alca foi fixada por toque (e nao por hover do mouse)? */
+  private fixadaPorToque = false;
   private readonly root: HTMLElement;
   private readonly addButton: HTMLButtonElement;
   private readonly dragButton: HTMLButtonElement;
@@ -105,6 +107,11 @@ class BlockHandleView {
     this.dragButton.addEventListener('dragend', this.onDragEnd);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('scroll', this.onScroll, true);
+    // No celular nao existe `mousemove`, entao a alca nunca aparecia e o bloco
+    // ficava sem nenhuma opcao — tocar na linha e o unico gesto disponivel.
+    // `pointerup` (e nao `click`) porque o clique no editor e consumido pelo
+    // ProseMirror para posicionar o cursor.
+    document.addEventListener('pointerup', this.onPointerUp, true);
     // Captura: precisamos rodar ANTES do roteamento do tiptap. O stopEvent do
     // NodeView devolve true para eventos drag* que caem no DOM de um node view,
     // o ProseMirror então ignora o dragover e ninguém chama preventDefault —
@@ -124,6 +131,7 @@ class BlockHandleView {
     this.dragButton.removeEventListener('dragend', this.onDragEnd);
     document.removeEventListener('mousemove', this.onMouseMove);
     document.removeEventListener('scroll', this.onScroll, true);
+    document.removeEventListener('pointerup', this.onPointerUp, true);
     this.view.dom.removeEventListener('dragover', this.onEditorDragOver, true);
     this.view.dom.removeEventListener('drop', this.onEditorDrop, true);
     this.view.dom.removeEventListener('dragleave', this.onEditorDragLeave, true);
@@ -133,10 +141,76 @@ class BlockHandleView {
 
   private hide() {
     this.target = null;
+    this.fixadaPorToque = false;
     this.root.classList.remove('is-visible');
   }
 
-  private onScroll = () => this.hide();
+  private onScroll = () => {
+    // No toque a alca foi fixada por um gesto explicito. Esconder no primeiro
+    // scroll tiraria ela da tela antes de dar tempo de usar — e no celular a
+    // simples abertura do teclado virtual ja dispara scroll.
+    if (this.fixadaPorToque && this.target) {
+      const rect = this.target.dom.getBoundingClientRect();
+      const editorRect = this.view.dom.getBoundingClientRect();
+      // Saiu da area visivel do editor: ai sim nao ha o que ancorar.
+      if (rect.bottom < editorRect.top || rect.top > editorRect.bottom) {
+        this.hide();
+        return;
+      }
+      this.root.style.top = `${rect.top + HANDLE_OFFSET}px`;
+      return;
+    }
+    this.hide();
+  };
+
+  /**
+   * Toque numa linha: mostra a alca daquele bloco, para o "+" e o punho
+   * ficarem alcancaveis sem passar o mouse. So vale para ponteiro grosso — no
+   * desktop quem manda continua sendo o `mousemove`, senao um clique comum
+   * passaria a fixar a alca e ela brigaria com o hover.
+   */
+  private onPointerUp = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') return;
+
+    // Tocou na propria alca: e o gesto de usar o botao, nao de trocar de alvo.
+    if (this.root.contains(event.target as HTMLElement)) return;
+
+    // Fora do editor: esconde, como o desktop faz ao sair da area.
+    if (!this.view.dom.contains(event.target as HTMLElement)) {
+      this.hide();
+      return;
+    }
+
+    const alvo = this.mostrarEm(event.clientX, event.clientY);
+    if (!alvo) {
+      this.hide();
+      return;
+    }
+    this.fixadaPorToque = true;
+  };
+
+  /**
+   * Posiciona e exibe a alca ao lado do bloco que contem o ponto. Devolve o
+   * alvo encontrado, ou null quando o ponto nao cai em bloco nenhum.
+   */
+  private mostrarEm(x: number, y: number): Target | null {
+    const editorRect = this.view.dom.getBoundingClientRect();
+    const found = blockAt(this.view, Math.max(x, editorRect.left + 1), y);
+    if (!found) return null;
+
+    const dom = this.view.nodeDOM(found.pos);
+    if (!(dom instanceof HTMLElement)) return null;
+
+    this.target = { ...found, dom };
+    const rect = dom.getBoundingClientRect();
+    this.root.style.top = `${rect.top + HANDLE_OFFSET}px`;
+    // No celular nao ha calha a esquerda: a coluna comeca colada na borda, e a
+    // alca posicionada fora da tela seria inalcancavel. O `Math.max` joga ela
+    // para dentro, sobre a margem do texto.
+    this.root.style.left = `${Math.max(4, rect.left - this.root.offsetWidth - HANDLE_OFFSET)}px`;
+    this.root.classList.add('is-visible');
+    return this.target;
+  }
 
   private onMouseMove = (event: MouseEvent) => {
     // Sobre a própria alça: mantém o alvo atual, senão ela sumiria ao ser usada.
@@ -151,25 +225,9 @@ class BlockHandleView {
       return;
     }
 
-    // Na faixa da alça o ponteiro está fora do texto; projeta para dentro da
-    // coluna para descobrir de qual linha ele está ao lado.
-    const found = blockAt(this.view, Math.max(x, editorRect.left + 1), y);
-    if (!found) {
-      this.hide();
-      return;
-    }
-
-    const dom = this.view.nodeDOM(found.pos);
-    if (!(dom instanceof HTMLElement)) {
-      this.hide();
-      return;
-    }
-
-    this.target = { ...found, dom };
-    const rect = dom.getBoundingClientRect();
-    this.root.style.top = `${rect.top + HANDLE_OFFSET}px`;
-    this.root.style.left = `${Math.max(4, rect.left - this.root.offsetWidth - HANDLE_OFFSET)}px`;
-    this.root.classList.add('is-visible');
+    // Na faixa da alça o ponteiro está fora do texto; o `mostrarEm` projeta
+    // para dentro da coluna para descobrir de qual linha ele está ao lado.
+    if (!this.mostrarEm(x, y)) this.hide();
   };
 
   /** "+" insere um parágrafo abaixo e abre o menu de blocos, como no Notion. */
