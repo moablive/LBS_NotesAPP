@@ -14,11 +14,10 @@ async function main() {
   const app = createApp();
   const server = app.listen(env.PORT, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
-    console.log(`TodoAPP backend listening on :${env.PORT} (${env.NODE_ENV})`);
+    console.log(`NotesAPP backend listening on :${env.PORT} (${env.NODE_ENV})`);
   });
 
-  // Lembretes de nota (`remind_at`) -> LBS Notify. Inerte enquanto
-  // NOTES_NOTIFY_USE_CENTRAL for `false`.
+  // Lembretes de nota (`remind_at`) -> Web Push proprio. Inerte sem par VAPID.
   const pararVarredor = iniciarVarredorDeLembretes();
 
   for (const sig of ['SIGINT', 'SIGTERM'] as const) {

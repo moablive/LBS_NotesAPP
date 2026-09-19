@@ -1,0 +1,1 @@
+ALTER TABLE "notes" ADD COLUMN "reminder_sent_at" timestamp with time zone;

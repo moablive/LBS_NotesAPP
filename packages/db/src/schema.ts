@@ -125,6 +125,21 @@ export const notes = pgTable(
     icon: text("icon"),
     // Zettelkasten / Reminders
     remindAt: timestamp("remind_at", { withTimezone: true }),
+    /**
+     * Quando o lembrete desta nota foi entregue.
+     *
+     * Existe porque a idempotência saiu de casa. O varredor emitia para o LBS
+     * Notify, que deduplicava por `eventId` e respondia `duplicated` — então
+     * reprocessar a mesma janela era de graça. Com a central descontinuada em
+     * 19/09/2026 o envio virou Web Push direto, e ninguém mais deduplica: sem
+     * esta coluna, cada varredura reenviaria o mesmo lembrete.
+     *
+     * "Pendente" é `reminder_sent_at IS NULL OR reminder_sent_at < remind_at`.
+     * A segunda metade é o que faz o REAGENDAMENTO funcionar: empurrar o
+     * `remind_at` para frente o deixa maior que o envio anterior, e a nota volta
+     * a entrar na varredura — que é o comportamento certo.
+     */
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
 
     // Aninhamento infinito estilo Notion: uma nota pode conter outras notas.
     // FK auto-referente com ON DELETE CASCADE → apagar uma nota apaga toda a

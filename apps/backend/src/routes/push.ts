@@ -4,12 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { env } from '@notesapp/services';
 import { pushSubscribeSchema, pushUnsubscribeSchema } from '@notesapp/models';
 import crypto from 'crypto';
-import webpush from 'web-push';
-
-const pushConfigured = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
-if (pushConfigured) {
-  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!);
-}
+import { enviarPushParaEndpoint, pushConfigured } from '../lib/push.js';
 
 export const pushRouter = Router();
 
@@ -42,13 +37,9 @@ pushRouter.post('/subscribe', async (req, res) => {
 
   // Confirmation push so the user immediately sees it working on the device.
   try {
-    await webpush.sendNotification(
+    await enviarPushParaEndpoint(
       { endpoint: parsed.endpoint, keys: parsed.keys },
-      JSON.stringify({
-        title: 'NotesAPP',
-        body: '🔔 Notificações ativadas neste aparelho!',
-        url: '/',
-      })
+      { title: 'NotesAPP', body: '🔔 Notificações ativadas neste aparelho!' },
     );
   } catch (err) {
     console.error('Falha ao enviar push de confirmação:', err);
