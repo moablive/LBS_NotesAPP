@@ -40,8 +40,32 @@ Visualize como suas ideias se conectam através de uma visualização interativa
 - Tags e metadados para organização profunda.
 - Zettelkasten facilitado.
 
-### 📂 Árvore de Diretórios
-Organize notas em pastas aninhadas infinitas com a mesma facilidade do explorador de arquivos local.
+### 📂 Árvore lateral
+
+Pastas aninhadas infinitas, com os gestos que se espera de um explorador de
+arquivos:
+
+| Gesto | O que faz |
+|---|---|
+| Botão direito, ou `•••` no hover | Renomear · Duplicar · Favoritar · Nova sub-página · Excluir |
+| Duplo clique, ou `F2` | Renomear na própria linha |
+| Arrastar para o **meio** de uma linha | Aninha: a página vira filha daquela |
+| Arrastar para o **topo/base** de uma linha | Reordena entre irmãs (barra de inserção) |
+| `Ctrl`/`Cmd` + clique | Marca para seleção múltipla |
+| `Shift` + clique | Marca o intervalo |
+| `Delete` | Manda para a lixeira, com **Desfazer** por 7s |
+| `Esc` | Limpa a seleção |
+
+Atalhos globais: `Cmd/Ctrl+K` busca rápida, `Cmd/Ctrl+N` nova página,
+`Cmd/Ctrl+Shift+Backspace` exclui a aberta. Todos ficam inertes enquanto o foco
+está num campo de texto.
+
+Duas decisões que explicam o comportamento:
+
+- **Excluir não pergunta.** Em vez de um modal a cada exclusão, a página vai para
+  a lixeira e um aviso oferece Desfazer por 7 segundos.
+- **Clique com modificador não abre a nota.** Marcar cinco páginas trocaria a nota
+  ativa cinco vezes, recarregando o editor a cada uma.
 
 ### 🤖 Assistente Telegram
 Capture ideias instantaneamente enviando mensagens (texto ou voz transcrita por IA) para o bot do Telegram. Elas são salvas diretamente no seu Inbox do NotesAPP.
@@ -232,78 +256,34 @@ docker compose --env-file .env up -d --build
 
 ---
 
-## 🔔 LBS Notify — notificações pela plataforma central
+## 🔔 Notificações — Web Push próprio
 
-Desde 27/08/2026 existe um serviço central de notificações da suite, o
-[**LBS Notify**](https://github.com/moablive/LBSNotify) (containers
-`lbs_notify_api` e `lbs_notify_worker`, banco `lbsnotify`). Ele substitui a
-infraestrutura de Web Push que cada app carregava duplicada.
+Este app entrega Web Push por conta própria: par VAPID no `.env`, tabela
+`push_subscriptions` no próprio banco e rotas em `apps/backend/src/routes/push.ts`
+(`/public-key`, `/subscribe`, `/unsubscribe`). O `usePush` do frontend confere a
+chave da inscrição existente e a refaz quando ela é de outro par — sem isso o
+sintoma seria "ativei e não chega nada", sem erro nenhum.
 
-> ⚠️ **Está DESLIGADO por padrão.** Com as flags abaixo em branco/`false` — que
-> é como elas nascem — o comportamento deste app é **exatamente** o de antes.
-> Nada muda até você virar as chaves, e a virada é um app por vez.
+> ### ⚠️ Os lembretes de nota NÃO disparam hoje
+>
+> `apps/backend/src/notify/reminders.ts` varre `notes.remind_at`, mas a primeira
+> linha útil dele é `if (!notify.ativo()) return 0` — e `notify` era o cliente da
+> central **LBS Notify**, descontinuada em 19/09/2026. Ou seja: dá para marcar o
+> lembrete no app e ele nunca chega, e **nunca chegou**, porque a central jamais
+> entregou um único aviso (faltava a borda pública no túnel).
+>
+> Consertar é redirecionar o varredor para o `web-push` local, do mesmo jeito que
+> o LBS_TTSAPP fez: uma função que escolhe o canal e, na ausência de central,
+> envia para todas as inscrições do usuário. **Pendente.**
 
-### As flags
+### Sobre o LBS Notify (histórico)
 
-| Variável | Onde | Vazio/`false` significa |
-|---|---|---|
-| `VITE_LBS_NOTIFY_URL` | build do frontend | o PWA registra o aparelho no `/api/push/*` deste app |
-| `LBS_NOTIFY_KEY` | backend/bot | chave de serviço deste app na central |
-| `NOTES_NOTIFY_USE_CENTRAL` | backend/bot | a entrega continua saindo daqui |
+A plataforma central de push da suíte foi **descontinuada em 19/09/2026** —
+containers derrubados, submódulo removido e repositório apagado do GitHub. As
+flags `NOTES_NOTIFY_USE_CENTRAL`, `LBS_NOTIFY_URL`, `LBS_NOTIFY_KEY` e
+`VITE_LBS_NOTIFY_URL` saíram do `.env`.
 
-### Como ligar
-
-```bash
-# 1) o PWA passa a registrar o aparelho na central
-#    .env:  VITE_LBS_NOTIFY_URL='https://notify.astralwavelabel.com'
-bash /mnt/nvme2tb/docker-services/server/dashboard/scripts/redeploy.sh LifeBusinessSuit/LBS_NotesAPP
-#    -> abra o app, ative as notificações, confirme que chega
-
-# 2) a entrega passa a sair da central
-#    .env:  NOTES_NOTIFY_USE_CENTRAL='true'
-bash /mnt/nvme2tb/docker-services/server/dashboard/scripts/redeploy.sh LifeBusinessSuit/LBS_NotesAPP
-```
-
-### Duas coisas que mordem
-
-**A inscrição antiga não migra.** Uma `PushSubscription` fica amarrada à chave
-pública VAPID usada no `subscribe()` do navegador. O Notify assina com **outro**
-par, então as linhas de ``push_subscriptions`` **não podem** ser copiadas para lá — o
-servidor de push responderia `403` em todo envio. Cada aparelho se reinscreve na
-primeira vez que a pessoa ativa. O `usePush` já confere a chave da inscrição
-existente e a refaz quando ela é do outro caminho; sem isso o sintoma seria
-"ativei e não chega nada", sem erro nenhum.
-
-**Entre os passos 1 e 2 pode chegar em dobro.** O mesmo aparelho fica inscrito
-nos dois lados por um período. É o preço do rollout gradual e some quando
-a `push_subscriptions` deste app for aposentada.
-
-### O que muda no código deste app
-
-| Arquivo | O que faz |
-|---|---|
-| `apps/backend/src/notify/reminders.ts` | varredor de `notes.remind_at` |
-| `apps/backend/src/lib/lbsNotify.ts` | cliente da API interna |
-| `apps/frontend/src/lib/lbsNotifyClient.ts` | registro do aparelho na central |
-| `apps/frontend/src/composables/usePush.ts` | escolhe o caminho e confere a chave VAPID |
-
-**Os lembretes de nota passaram a existir de verdade.** A coluna
-`notes.remind_at` estava no schema desde sempre e **ninguém a lia**: dava para
-marcar o lembrete no app e ele nunca chegava. Faltava justamente a peça que a
-central passou a oferecer — uma fila com idempotência. O varredor roda a cada
-`NOTES_REMINDER_SCAN_MINUTES` (padrão 1) e emite `notes.reminder` em lote.
-
-**Não precisou de migration.** O `eventId` é
-`notes:reminder:<nota>:<remind_at ISO>`, então reemitir não cria segunda
-notificação e o varredor pode reprocessar a mesma janela à vontade. Sem isso
-seria preciso uma coluna `ja_notificado` — e ela teria que ser transacional com
-o envio.
-
-Detalhes que valem saber: a janela olha **1 hora para trás** (para o container
-poder ficar fora do ar alguns minutos sem perder lembrete; mais larga que isso e
-o primeiro deploy dispararia todo o histórico de uma vez); reagendar o lembrete
-gera evento novo e avisa de novo, como deve ser; nota na lixeira não toca; e o
-timer é `unref` com `stop` no SIGTERM, para não segurar o deploy.
-
-📖 Contrato da API, decisões e operação: [`LBSNotify/README.md`](https://github.com/moablive/LBSNotify).
-Sequência de corte detalhada: `LBSNotify/docs/ARCHITECTURE_DISCOVERY.md`.
+O código está preservado em `/root/recuperado/LBS_NotifyAPP-20260919.bundle`.
+Restaram no repositório, inertes, `apps/backend/src/lib/lbsNotify.ts` e
+`apps/frontend/src/lib/lbsNotifyClient.ts`: eles degradam sozinhos (`enabled`
+falso = nenhuma chamada sai), então remover é limpeza, não urgência.
