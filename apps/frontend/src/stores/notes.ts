@@ -209,6 +209,52 @@ export const useNotesStore = defineStore('notes', {
       this.expand(parentId);
       return child;
     },
+    /**
+     * Copia a nota com toda a sub-árvore.
+     *
+     * A recursão não é luxo: o corpo de uma página guarda blocos de sub-página
+     * com o id da filha embutido, então uma cópia rasa nasceria com blocos
+     * apontando para as filhas do ORIGINAL — e apagar uma sub-página pela cópia
+     * apagaria a do original. Cada filha copiada tem o id trocado no HTML.
+     *
+     * `parentId` só é passado pela própria recursão; quem chama de fora omite,
+     * e é isso que marca a nota de topo (a que ganha " (cópia)" no título e
+     * fica ativa no fim).
+     */
+    async duplicateNote(noteId: string, parentId?: string | null): Promise<NoteDto | null> {
+      const original = this.notes.find(n => n.id === noteId);
+      if (!original) return null;
+
+      const ehTopo = parentId === undefined;
+      const title = ehTopo
+        ? `${original.title || 'Sem título'} (cópia)`
+        : (original.title || 'Sem título');
+
+      const copia = await this.addNote(
+        title,
+        original.folderId ?? null,
+        ehTopo ? (original.parentId ?? null) : parentId,
+        false,
+      );
+
+      let content = original.content || '';
+      for (const filha of this.childrenOf(noteId)) {
+        const nova = await this.duplicateNote(filha.id, copia.id);
+        // Os ids são uuid: troca literal no HTML é segura e não precisa parser.
+        if (nova) content = content.split(filha.id).join(nova.id);
+      }
+
+      await this.updateNoteFields(copia.id, {
+        title,
+        content,
+        icon: original.icon ?? null,
+        coverImage: original.coverImage ?? null,
+        coverPositionY: original.coverPositionY ?? 50,
+      });
+
+      if (ehTopo) this.setActiveNote(copia.id);
+      return this.notes.find(n => n.id === copia.id) ?? copia;
+    },
     /** Ids de todas as descendentes (filhas, netas, …) de uma nota. */
     descendantIds(noteId: string): string[] {
       const acc: string[] = [];

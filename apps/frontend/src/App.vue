@@ -6,6 +6,12 @@
        um `confirm()` ficaria pendurado para sempre. -->
   <ConfirmDialog />
 
+  <!-- Um menu de contexto e uma pilha de avisos para o app inteiro. Aqui, e nao
+       dentro da arvore lateral: a sidebar tem overflow-y-auto e recortaria o
+       popup na primeira linha visivel. -->
+  <ContextMenu />
+  <ToastStack />
+
   <!-- Fora do router-view de proposito: sobrevivem a troca de rota. -->
   <VersionBadge />
   <UpdateBanner />
@@ -14,6 +20,8 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
+import ToastStack from '@/components/ToastStack.vue';
 import UpdateBanner from '@/components/UpdateBanner.vue';
 import VersionBadge from '@/components/VersionBadge.vue';
 

@@ -658,10 +658,12 @@ import IconPicker from '@/components/IconPicker.vue';
 import SettingsModal from '@/components/SettingsModal.vue';
 import GraphView from '@/components/GraphView.vue';
 import QuickSwitcher from '@/components/QuickSwitcher.vue';
+import { useToast } from '@/composables/useToast';
 import '@/composables/useTheme';
 
 const notesStore = useNotesStore();
 const authStore = useAuthStore();
+const toast = useToast();
 
 const isSidebarOpen = ref(false);
 const isSidebarMinimized = ref(localStorage.getItem('notes_sidebar_minimized') === 'true');
@@ -1070,10 +1072,18 @@ const onDropRoot = async () => {
   }
 };
 
-// Excluir a nota ativa = mover para a LIXEIRA (reversível, sem modal).
+// Excluir a nota ativa = mover para a LIXEIRA (reversível, sem modal). O aviso
+// com "Desfazer" é o que substitui o modal de confirmação: agir na hora e
+// oferecer a volta por alguns segundos, em vez de perguntar a cada exclusão.
 const deleteActiveNote = async () => {
-  if (!notesStore.activeNoteId) return;
-  await notesStore.deleteNote(notesStore.activeNoteId);
+  const id = notesStore.activeNoteId;
+  if (!id) return;
+  const titulo = notesStore.activeNote?.title || 'Sem título';
+  await notesStore.deleteNote(id);
+  toast.show(`"${titulo}" foi para a lixeira`, {
+    actionLabel: 'Desfazer',
+    action: () => notesStore.restoreNote(id),
+  });
 };
 
 const askConfirm = (opts: ConfirmState) => {
@@ -1144,6 +1154,13 @@ watch(() => notesStore.activeNoteId, (id) => {
 /** Seletor rápido de página (Cmd+K). */
 const quickSwitcherAberto = ref(false);
 
+/** Foco em campo editável — inclui o contenteditable do Tiptap. */
+const emCampoDeTexto = () => {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
+};
+
 const onKeyDown = (e: KeyboardEvent) => {
   // Cmd+K (Mac) / Ctrl+K: seletor rápido de página. Alterna, para a mesma
   // tecla fechar o que abriu. O preventDefault é obrigatório: no Chrome,
@@ -1151,6 +1168,22 @@ const onKeyDown = (e: KeyboardEvent) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     quickSwitcherAberto.value = !quickSwitcherAberto.value;
+    return;
+  }
+  // Cmd/Ctrl+N: nova página. Só abre o modal se nenhum campo estiver em foco —
+  // o listener é do `document`, então sem esta guarda o atalho dispararia por
+  // cima de quem está escrevendo no editor ou renomeando uma linha da árvore.
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && !emCampoDeTexto()) {
+    e.preventDefault();
+    createNote();
+    return;
+  }
+  // Cmd/Ctrl+Shift+Backspace: manda a nota aberta para a lixeira. O Delete seco
+  // fica de fora de propósito — a tecla pertence ao editor, e o da ÁRVORE já é
+  // tratado na própria linha (NoteTreeItem), sobre a nota apontada.
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'Backspace' || e.key === 'Delete')) {
+    e.preventDefault();
+    deleteActiveNote();
     return;
   }
   if (e.key === 'Escape') {
