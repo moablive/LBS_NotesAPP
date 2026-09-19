@@ -45,7 +45,7 @@ pushRouter.post('/subscribe', async (req, res) => {
     await webpush.sendNotification(
       { endpoint: parsed.endpoint, keys: parsed.keys },
       JSON.stringify({
-        title: 'TodoAPP',
+        title: 'NotesAPP',
         body: '🔔 Notificações ativadas neste aparelho!',
         url: '/',
       })
