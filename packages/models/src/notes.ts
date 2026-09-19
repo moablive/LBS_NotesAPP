@@ -19,6 +19,20 @@ export const updateNoteSchema = createNoteSchema.partial().extend({
   id: z.string().optional()
 });
 
+/**
+ * Reordenação de irmãs. `noteIds` é a ordem final COMPLETA das filhas de
+ * `parentId` — não um par (id, índice).
+ *
+ * A lista inteira é de propósito: mandar só a nota movida obrigaria o servidor
+ * a adivinhar o que fazer com os empates de `order`, e dois arrastos seguidos
+ * embaralhariam a árvore. Com a lista, o último pedido a chegar é a verdade.
+ */
+export const reorderNotesSchema = z.object({
+  parentId: z.string().nullable(),
+  noteIds: z.array(z.string()),
+});
+
 export type CreateNoteDto = z.infer<typeof createNoteSchema>;
 export type UpdateNoteDto = z.infer<typeof updateNoteSchema>;
+export type ReorderNotesDto = z.infer<typeof reorderNotesSchema>;
 export type NoteDto = Note;

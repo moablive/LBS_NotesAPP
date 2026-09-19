@@ -1,24 +1,37 @@
 <template>
   <div>
     <div
-      class="group flex items-center gap-1 rounded-md pr-1 cursor-pointer transition-colors select-none"
+      class="group relative flex items-center gap-1 rounded-md pr-1 cursor-pointer transition-colors select-none"
       :class="[
-        isActive ? 'bg-[var(--bg-hover)] text-white' : 'text-[var(--text)] hover:bg-[var(--bg-hover)]',
-        isDropTarget ? 'ring-1 ring-[var(--accent)] ring-inset bg-[var(--bg-hover)]' : ''
+        isSelected
+          ? 'bg-[var(--accent)]/20 text-white'
+          : isActive ? 'bg-[var(--bg-hover)] text-white' : 'text-[var(--text)] hover:bg-[var(--bg-hover)]',
+        zona === 'dentro' ? 'ring-1 ring-[var(--accent)] ring-inset bg-[var(--bg-hover)]' : ''
       ]"
       :style="{ paddingLeft: depth * 14 + 4 + 'px' }"
       :draggable="isRenaming ? 'false' : 'true'"
       tabindex="0"
       @keydown="onKeydown"
-      @click="select"
+      @click="select($event)"
       @dblclick.stop="startRename"
       @contextmenu="openMenu($event)"
       @dragstart="onDragStart"
       @dragend="onDragEnd"
       @dragover.prevent="onDragOver"
-      @dragleave="isDropTarget = false"
+      @dragleave="zona = null"
       @drop.prevent="onDrop"
     >
+      <!-- Barra de insercao. So aparece nas bordas: no meio da linha o arrasto
+           continua ANINHANDO, que e o gesto antigo e nao foi tirado. -->
+      <div
+        v-if="zona === 'antes' || zona === 'depois'"
+        class="absolute left-0 right-0 h-0.5 bg-[var(--accent)] rounded-full pointer-events-none z-10"
+        :class="zona === 'antes' ? '-top-px' : '-bottom-px'"
+        :style="{ marginLeft: depth * 14 + 4 + 'px' }"
+      >
+        <span class="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-[var(--accent)]"></span>
+      </div>
+
       <!-- Chevron / spacer -->
       <button
         v-if="hasChildren"
@@ -109,16 +122,36 @@ const props = defineProps<{ noteId: string; depth: number }>();
 const notesStore = useNotesStore();
 const menu = useContextMenu();
 const toast = useToast();
-const isDropTarget = ref(false);
+/** Onde o arrasto vai cair: antes desta linha, dentro dela, ou depois. */
+type Zona = 'antes' | 'dentro' | 'depois';
+const zona = ref<Zona | null>(null);
 
 const note = computed(() => notesStore.notes.find(n => n.id === props.noteId) || null);
 const children = computed(() => notesStore.childrenOf(props.noteId));
 const hasChildren = computed(() => children.value.length > 0);
 const expanded = computed(() => !!notesStore.expandedIds[props.noteId]);
 const isActive = computed(() => notesStore.activeNoteId === props.noteId);
+const isSelected = computed(() => notesStore.selectedIds.includes(props.noteId));
 
-function select() {
+/**
+ * Clique simples abre a nota; com modificador, seleciona.
+ *
+ * Abrir E selecionar no mesmo gesto seria ambíguo: Ctrl+clique para marcar
+ * cinco notas trocaria a nota aberta cinco vezes, recarregando o editor a cada
+ * uma. Por isso o caminho com modificador NÃO chama `setActiveNote`.
+ */
+function select(e: MouseEvent) {
   if (isRenaming.value) return;
+  if (e.shiftKey) {
+    e.preventDefault();          // sem isto o navegador seleciona o texto das linhas
+    notesStore.selectRange(props.noteId);
+    return;
+  }
+  if (e.ctrlKey || e.metaKey) {
+    notesStore.toggleSelected(props.noteId);
+    return;
+  }
+  notesStore.clearSelection();
   notesStore.setActiveNote(props.noteId);
 }
 
@@ -225,7 +258,7 @@ function onDragStart(e: DragEvent) {
 
 function onDragEnd() {
   notesStore.setDragging(null);
-  isDropTarget.value = false;
+  zona.value = null;
 }
 
 function canDrop(): boolean {
@@ -235,15 +268,43 @@ function canDrop(): boolean {
   return !notesStore.descendantIds(dragging).includes(props.noteId);
 }
 
-function onDragOver() {
-  isDropTarget.value = canDrop();
+/**
+ * Onde o ponteiro está DENTRO da linha decide o gesto.
+ *
+ * O quarto de cima e o de baixo inserem entre irmãs; a metade do meio aninha,
+ * que era o único comportamento até aqui. A faixa de 25% é o que o Notion usa
+ * — menos que isso e virar filha por engano vira rotina, mais que isso e
+ * reordenar fica difícil em linha de 26px.
+ */
+function onDragOver(e: DragEvent) {
+  if (!canDrop()) {
+    zona.value = null;
+    return;
+  }
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const y = e.clientY - r.top;
+  if (y < r.height * 0.25) zona.value = 'antes';
+  else if (y > r.height * 0.75) zona.value = 'depois';
+  else zona.value = 'dentro';
 }
 
 async function onDrop() {
-  isDropTarget.value = false;
+  const alvo = zona.value;
+  zona.value = null;
   const dragging = notesStore.draggingId;
-  if (!dragging || !canDrop()) return;
-  await notesStore.moveNote(dragging, props.noteId);
+  if (!dragging || !alvo || !canDrop()) return;
+
+  if (alvo === 'dentro') {
+    await notesStore.moveNote(dragging, props.noteId);
+  } else {
+    // Índice DESTA nota entre as irmãs, já sem a arrastada: com ela ainda na
+    // lista, mover uma nota para baixo dentro do mesmo pai erraria por um.
+    const pai = note.value?.parentId ?? null;
+    const irmas = notesStore.childrenOf(pai).filter(n => n.id !== dragging);
+    const i = irmas.findIndex(n => n.id === props.noteId);
+    if (i === -1) return;
+    await notesStore.reorderNote(dragging, pai, alvo === 'antes' ? i : i + 1);
+  }
   notesStore.setDragging(null);
 }
 </script>

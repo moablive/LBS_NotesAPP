@@ -134,6 +134,31 @@
               <span class="text-[13px] font-medium">Nova página</span>
             </div>
 
+            <!-- Barra da seleção múltipla. Fica ACIMA da cadeia v-if/v-else da
+                 busca: um elemento com `v-if` no meio dela quebraria o `v-else`
+                 da árvore, que precisa ser irmão imediato do `v-if` da busca. -->
+            <div
+              v-if="notesStore.selectedIds.length"
+              class="flex items-center gap-2 mb-1 px-2 py-1.5 rounded-md bg-[var(--accent)]/15 border border-[var(--accent)]/40"
+            >
+              <span class="text-[12px] font-semibold text-white flex-1">
+                {{ notesStore.selectedIds.length }} selecionada{{ notesStore.selectedIds.length > 1 ? 's' : '' }}
+              </span>
+              <button
+                class="text-[11px] font-medium text-[#ff3b30] hover:underline"
+                title="Mover para a lixeira"
+                @click="excluirSelecionadas"
+              >
+                Excluir
+              </button>
+              <button
+                class="text-[11px] font-medium text-[var(--muted)] hover:text-[var(--text)]"
+                @click="notesStore.clearSelection()"
+              >
+                Limpar
+              </button>
+            </div>
+
             <!-- Resultados de busca (plano) -->
             <template v-if="notesStore.searchQuery.trim()">
               <div
@@ -1086,6 +1111,26 @@ const deleteActiveNote = async () => {
   });
 };
 
+/**
+ * Manda a seleção inteira para a lixeira, com Desfazer.
+ *
+ * O restore percorre os ids na ordem INVERSA da exclusão: restaurar uma filha
+ * antes do pai a normalizaria para a raiz no backend, e a árvore voltaria
+ * achatada.
+ */
+const excluirSelecionadas = async () => {
+  const quantas = notesStore.selectedIds.length;
+  if (!quantas) return;
+  const apagadas = await notesStore.deleteSelected();
+  if (!apagadas.length) return;
+  toast.show(`${quantas} página${quantas > 1 ? 's foram' : ' foi'} para a lixeira`, {
+    actionLabel: 'Desfazer',
+    action: async () => {
+      for (const id of [...apagadas].reverse()) await notesStore.restoreNote(id);
+    },
+  });
+};
+
 const askConfirm = (opts: ConfirmState) => {
   confirmState.value = opts;
 };
@@ -1186,9 +1231,19 @@ const onKeyDown = (e: KeyboardEvent) => {
     deleteActiveNote();
     return;
   }
+  // Delete/Backspace com seleção ativa apaga o lote. Guardado por
+  // `emCampoDeTexto`: o listener é do `document`, e sem isso apagar uma letra
+  // no editor mandaria as páginas selecionadas para a lixeira.
+  if ((e.key === 'Delete' || e.key === 'Backspace')
+      && notesStore.selectedIds.length && !emCampoDeTexto()) {
+    e.preventDefault();
+    excluirSelecionadas();
+    return;
+  }
   if (e.key === 'Escape') {
     // Antes dos demais: é o diálogo mais acima na pilha quando está aberto.
     if (quickSwitcherAberto.value) { quickSwitcherAberto.value = false; return; }
+    if (notesStore.selectedIds.length) { notesStore.clearSelection(); return; }
     if (workspaceMenuOpen.value) workspaceMenuOpen.value = false;
     else if (showCreateModal.value) showCreateModal.value = false;
     else if (picker.value) picker.value = null;

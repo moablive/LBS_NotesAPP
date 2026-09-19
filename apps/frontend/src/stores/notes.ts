@@ -39,6 +39,11 @@ export const useNotesStore = defineStore('notes', {
     expandedIds: {} as Record<string, boolean>,
     // Nota sendo arrastada (drag-and-drop na árvore).
     draggingId: null as string | null,
+    // Seleção múltipla na árvore (Ctrl/Cmd+clique e Shift+clique). Array e não
+    // Set: o Pinia serializa o estado para o devtools, e Set vira `{}` lá.
+    selectedIds: [] as string[],
+    // Âncora do Shift+clique — a última linha escolhida SEM Shift.
+    selectionAnchor: null as string | null,
     // Últimas notas abertas, da mais recente para a mais antiga. Guarda só o
     // id: o título e o ícone saem de `notes`, então renomear a nota não deixa
     // um nome velho no histórico.
@@ -342,6 +347,65 @@ export const useNotesStore = defineStore('notes', {
         this.expand(newParentId);
       }
     },
+    /**
+     * Solta a nota ENTRE duas irmãs, em vez de dentro de outra.
+     *
+     * O arrasto antigo só sabia aninhar: soltar A sobre B fazia A virar filha
+     * de B, e não havia como dizer "A vem depois de B, no mesmo nível". Aqui o
+     * alvo é uma POSIÇÃO — `index` é o lugar na lista final de filhas de
+     * `newParentId`.
+     */
+    async reorderNote(noteId: string, newParentId: string | null, index: number) {
+      const note = this.notes.find(n => n.id === noteId);
+      if (!note) return;
+
+      // Mesma guarda de ciclo do moveNote: a nota não pode virar filha de uma
+      // descendente dela — a árvore ficaria órfã e o backend aceitaria.
+      if (newParentId) {
+        if (newParentId === noteId) return;
+        if (this.descendantIds(noteId).includes(newParentId)) return;
+      }
+
+      const oldParentId = note.parentId ?? null;
+      const irmas = this.childrenOf(newParentId).filter(n => n.id !== noteId);
+      const destino = Math.max(0, Math.min(index, irmas.length));
+      const ordenado = [...irmas.slice(0, destino), note, ...irmas.slice(destino)];
+
+      // Otimista: a lista salta para o lugar certo antes da rede responder,
+      // senão a linha volta ao ponto de origem por um instante depois do drop.
+      const anterior = this.notes.map(n => ({ id: n.id, order: (n as any).order, parentId: n.parentId }));
+      ordenado.forEach((n, i) => {
+        const alvo = this.notes.find(x => x.id === n.id);
+        if (alvo) {
+          (alvo as any).order = i;
+          alvo.parentId = newParentId;
+        }
+      });
+
+      try {
+        await api.post('/notes/reorder', { parentId: newParentId, noteIds: ordenado.map(n => n.id) });
+      } catch (err) {
+        for (const s of anterior) {
+          const alvo = this.notes.find(x => x.id === s.id);
+          if (alvo) {
+            (alvo as any).order = s.order;
+            alvo.parentId = s.parentId;
+          }
+        }
+        console.error(err);
+        return;
+      }
+
+      // O bloco de sub-página segue a nota só quando o PAI muda. Reordenar
+      // entre as mesmas irmãs não mexe no corpo de ninguém.
+      if (oldParentId !== newParentId) {
+        if (oldParentId) await this.unlinkSubPage(oldParentId, noteId);
+        if (newParentId) {
+          await this.linkSubPage(newParentId, noteId, note.title);
+          this.expand(newParentId);
+        }
+      }
+    },
     async toggleFavorite(noteId: string) {
       const note = this.notes.find(n => n.id === noteId);
       if (!note) return;
@@ -353,6 +417,71 @@ export const useNotesStore = defineStore('notes', {
     expand(noteId: string) {
       this.expandedIds[noteId] = true;
     },
+    /* ---------------------------------------------- seleção múltipla --- */
+
+    /** Ctrl/Cmd+clique: entra ou sai da seleção, sem mexer nas outras. */
+    toggleSelected(noteId: string) {
+      const i = this.selectedIds.indexOf(noteId);
+      if (i === -1) this.selectedIds.push(noteId);
+      else this.selectedIds.splice(i, 1);
+      this.selectionAnchor = noteId;
+    },
+
+    /**
+     * Shift+clique: seleciona da âncora até aqui.
+     *
+     * O intervalo é calculado sobre a árvore VISÍVEL e achatada, não sobre
+     * `notes`: o usuário enxerga uma lista, e selecionar "daqui até ali" tem
+     * que pegar exatamente as linhas entre as duas — inclusive filhas de outro
+     * pai, e nunca uma linha escondida dentro de um nó fechado.
+     */
+    selectRange(noteId: string) {
+      const visiveis = this.visibleNoteIds;
+      const fim = visiveis.indexOf(noteId);
+      const ini = this.selectionAnchor ? visiveis.indexOf(this.selectionAnchor) : -1;
+      if (fim === -1 || ini === -1) {
+        this.selectedIds = [noteId];
+        this.selectionAnchor = noteId;
+        return;
+      }
+      const [a, b] = ini <= fim ? [ini, fim] : [fim, ini];
+      this.selectedIds = visiveis.slice(a, b + 1);
+    },
+
+    selectOnly(noteId: string) {
+      this.selectedIds = [noteId];
+      this.selectionAnchor = noteId;
+    },
+
+    clearSelection() {
+      this.selectedIds = [];
+      this.selectionAnchor = null;
+    },
+
+    /**
+     * Manda a seleção inteira para a lixeira.
+     *
+     * Só os TOPOS são apagados: o backend leva a sub-árvore junto, então pedir
+     * a exclusão de uma nota e da filha dela faria a segunda chamada bater numa
+     * nota que já não existe — 404 no meio de um lote.
+     *
+     * Devolve os ids apagados, na ordem, para quem quiser desfazer.
+     */
+    async deleteSelected(): Promise<string[]> {
+      const selecionadas = new Set(this.selectedIds);
+      const topos = this.selectedIds.filter(id => {
+        let p = this.notes.find(n => n.id === id)?.parentId ?? null;
+        while (p) {
+          if (selecionadas.has(p)) return false;
+          p = this.notes.find(n => n.id === p)?.parentId ?? null;
+        }
+        return true;
+      });
+      for (const id of topos) await this.deleteNote(id);
+      this.clearSelection();
+      return topos;
+    },
+
     setDragging(noteId: string | null) {
       this.draggingId = noteId;
     },
@@ -431,6 +560,21 @@ export const useNotesStore = defineStore('notes', {
     // Notas raiz (parentId nulo).
     treeRoots(): NoteDto[] {
       return this.childrenOf(null);
+    },
+    /**
+     * A árvore como o usuário a vê: achatada, na ordem da tela, e sem o que
+     * está dentro de um nó fechado. É a base do Shift+clique.
+     */
+    visibleNoteIds(): string[] {
+      const acc: string[] = [];
+      const desce = (parentId: string | null) => {
+        for (const n of this.childrenOf(parentId)) {
+          acc.push(n.id);
+          if (this.expandedIds[n.id]) desce(n.id);
+        }
+      };
+      desce(null);
+      return acc;
     },
     // Notas marcadas como favoritas (para a seção Favorites, estilo Notion).
     favorites(state): NoteDto[] {

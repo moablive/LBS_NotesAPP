@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, schema } from '@notesapp/db';
 import { eq, and, sql, isNull, isNotNull } from 'drizzle-orm';
-import { createNoteSchema, updateNoteSchema } from '@notesapp/models';
+import { createNoteSchema, updateNoteSchema, reorderNotesSchema } from '@notesapp/models';
 import crypto from 'crypto';
 import { ensureWorkspace } from './workspaces.js';
 
@@ -254,6 +254,38 @@ notesRouter.post('/', async (req, res) => {
   }
 
   res.status(201).json(inserted[0]);
+});
+
+/**
+ * Grava a ordem das filhas de um pai (ou da raiz, com `parentId: null`).
+ *
+ * Fica ANTES das rotas com `:id` de propósito: o Express casa na ordem de
+ * registro, e uma rota `/:id` declarada acima engoliria `/reorder` como se
+ * "reorder" fosse o id de uma nota.
+ *
+ * Transação: ordem pela metade é pior que ordem velha — duas notas com o mesmo
+ * `order` caem no desempate por `createdAt` e a árvore pula sozinha na tela.
+ */
+notesRouter.post('/reorder', async (req, res) => {
+  const loginhubId = String(req.user!.loginhubId);
+  const parsed = reorderNotesSchema.parse(req.body);
+
+  await db.transaction(async (tx) => {
+    let order = 0;
+    for (const noteId of parsed.noteIds) {
+      // `userId` no WHERE: sem ele, saber o id de uma nota alheia bastaria para
+      // reordenar (e reparentar) a árvore de outra pessoa.
+      await tx.update(schema.notes)
+        .set({ order, parentId: parsed.parentId })
+        .where(and(
+          eq(schema.notes.id, noteId),
+          eq(schema.notes.userId, loginhubId),
+        ));
+      order++;
+    }
+  });
+
+  res.status(204).send();
 });
 
 notesRouter.patch('/:id', async (req, res) => {
