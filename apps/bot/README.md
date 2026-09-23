@@ -32,13 +32,13 @@ TypeScript / Node.js · PostgreSQL (`pg`) · Telegraf · Zod
 
 ## Como Executar 🐳
 
-O bot sobe pelo compose da **raiz** do NotesAPP como `app_notesapp_bot` — não
+O bot sobe pelo compose da **raiz** do NotesAPP como `lbs_notesapp_bot` — não
 existe compose próprio aqui (havia um, copiado do TodoAPP, que declarava
 `bot_todo_bot` e duplicava o nome de container do outro app).
 
 ```bash
 # na raiz do NotesAPP
-docker compose --env-file ../shared.env --env-file .env up -d --build app_notesapp_bot
+docker compose --env-file ../shared.env --env-file .env up -d --build lbs_notesapp_bot
 ```
 
 Variáveis: veja `.env.example`. Em produção o `DATABASE_URL` é montado pelo

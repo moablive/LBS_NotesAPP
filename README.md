@@ -264,26 +264,9 @@ Este app entrega Web Push por conta própria: par VAPID no `.env`, tabela
 chave da inscrição existente e a refaz quando ela é de outro par — sem isso o
 sintoma seria "ativei e não chega nada", sem erro nenhum.
 
-> ### ⚠️ Os lembretes de nota NÃO disparam hoje
->
-> `apps/backend/src/notify/reminders.ts` varre `notes.remind_at`, mas a primeira
-> linha útil dele é `if (!notify.ativo()) return 0` — e `notify` era o cliente da
-> central **LBS Notify**, descontinuada em 19/09/2026. Ou seja: dá para marcar o
-> lembrete no app e ele nunca chega, e **nunca chegou**, porque a central jamais
-> entregou um único aviso (faltava a borda pública no túnel).
->
-> Consertar é redirecionar o varredor para o `web-push` local, do mesmo jeito que
-> o LBS_TTSAPP fez: uma função que escolhe o canal e, na ausência de central,
-> envia para todas as inscrições do usuário. **Pendente.**
+Os lembretes de nota (`notes.remind_at`) saem por esse mesmo Web Push: o
+`apps/backend/src/notify/reminders.ts` varre a cada minuto e marca
+`notes.reminder_sent_at`, porque o `web-push` não deduplica sozinho.
 
-### Sobre o LBS Notify (histórico)
-
-A plataforma central de push da suíte foi **descontinuada em 19/09/2026** —
-containers derrubados, submódulo removido e repositório apagado do GitHub. As
-flags `NOTES_NOTIFY_USE_CENTRAL`, `LBS_NOTIFY_URL`, `LBS_NOTIFY_KEY` e
-`VITE_LBS_NOTIFY_URL` saíram do `.env`.
-
-O código está preservado em `/root/recuperado/LBS_NotifyAPP-20260919.bundle`.
-Restaram no repositório, inertes, `apps/backend/src/lib/lbsNotify.ts` e
-`apps/frontend/src/lib/lbsNotifyClient.ts`: eles degradam sozinhos (`enabled`
-falso = nenhuma chamada sai), então remover é limpeza, não urgência.
+> Não existe central de push na suíte: o antigo LBS Notify foi descontinuado
+> em 19/09/2026. Cada app envia o próprio Web Push.
