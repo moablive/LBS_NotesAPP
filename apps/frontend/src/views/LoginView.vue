@@ -83,6 +83,7 @@
               ? 'Digite um dos codigos de recuperacao que voce guardou.'
               : 'Digite o codigo de 6 digitos do seu aplicativo autenticador.' }}
           </p>
+          <GoogleAuthAviso v-if="!usarBackup" modo="codigo" emissor="NotesAPP" class="mt-4 text-white" />
         </div>
 
         <form @submit.prevent="handleSegundoFator" class="space-y-6">
@@ -128,6 +129,7 @@
 </template>
 
 <script setup lang="ts">
+import GoogleAuthAviso from '../components/GoogleAuthAviso.vue';
 import { ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import TwoFactorEnroll from '@/components/TwoFactorEnroll.vue';
