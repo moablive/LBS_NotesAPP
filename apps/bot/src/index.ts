@@ -1,6 +1,6 @@
 import { Telegraf, session, Scenes } from 'telegraf';
 import { env } from './config.js';
-import { noMeuBruxo, receberDoMeuBruxo } from './lib/meubruxo.js';
+import { noMoabinhoIA, receberDoMoabinhoIA } from './lib/moabinhoia.js';
 import type { BotContext } from './context.js';
 import { auth, markLinked } from './auth.js';
 import { handleListNotes, handleListWorkspaces } from './handlers/notes.js';
@@ -86,8 +86,8 @@ bot.catch((err, ctx) => {
   console.error(`[bot] erro ao processar update ${ctx.updateType}:`, err);
 });
 
-if (noMeuBruxo) {
-  receberDoMeuBruxo(bot);
+if (noMoabinhoIA) {
+  receberDoMoabinhoIA(bot);
 } else {
   bot.launch({ dropPendingUpdates: true }).catch((err: unknown) => {
     console.error('[bot] polling encerrado por erro:', err);
@@ -96,5 +96,5 @@ if (noMeuBruxo) {
 }
 console.log('🤖 Notes Bot rodando...');
 
-process.once('SIGINT', () => (noMeuBruxo ? process.exit(0) : bot.stop('SIGINT')));
-process.once('SIGTERM', () => (noMeuBruxo ? process.exit(0) : bot.stop('SIGTERM')));
+process.once('SIGINT', () => (noMoabinhoIA ? process.exit(0) : bot.stop('SIGINT')));
+process.once('SIGTERM', () => (noMoabinhoIA ? process.exit(0) : bot.stop('SIGTERM')));
