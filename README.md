@@ -270,3 +270,18 @@ Os lembretes de nota (`notes.remind_at`) saem por esse mesmo Web Push: o
 
 > Não existe central de push na suíte: o antigo LBS Notify foi descontinuado
 > em 19/09/2026. Cada app envia o próprio Web Push.
+
+## Entrar pelo cofre do LoginHUB
+
+Desde 20/11/2026 a tela de login tem o botão **Entrar pelo cofre do LoginHUB**, igual ao do MoneyAPP. O app manda a
+pessoa ao cofre do hub (`loginhub.astralwavelabel.com/cofre/entrada`), que abre com a digital do aparelho (Touch ID
+no Mac) ou com a palavra-passe e assina um desafio de 5 minutos, de uso único. A volta é em
+`https://notes.astralwavelabel.com/entrar` (apelido da rota `/login`), com a assinatura no `#` da URL, e o app troca
+a assinatura pela sessão em `POST /auth/cofre-entrada/login/verificar`.
+
+- Código: `apps/frontend/src/lib/cofreEntrada.ts` (cópia do MoneyAPP), ações `irAoCofreParaEntrar` e
+  `concluirEntradaPeloCofre` em `stores/auth.ts`, botão e volta em `views/LoginView.vue`.
+- No hub o app precisa de `aplicativos.webauthn_rp_id = notes.astralwavelabel.com` e `platform_url` em https.
+- Se o cofre já tem o login do NotesAPP guardado (e-mail, senha e 2FA), ele mesmo cria a chave de entrada na primeira
+  vez ("Entrar como …"); não há tela de cadastro no app.
+- Plano e detalhes: "Projeto - LoginHUB ／ Plano Biometria (passkeys)", pasta 📦 Documentação do servidor do Drive.
